@@ -73,16 +73,7 @@ public class AppConfig {
     // --- 內部類別 ---
 
     public static class ColumnsConfig {
-        private boolean includeOverseasReinsurance = false;
         private List<String> hiddenCodes = new ArrayList<>();
-
-        public boolean isIncludeOverseasReinsurance() {
-            return includeOverseasReinsurance;
-        }
-
-        public void setIncludeOverseasReinsurance(boolean includeOverseasReinsurance) {
-            this.includeOverseasReinsurance = includeOverseasReinsurance;
-        }
 
         public List<String> getHiddenCodes() {
             return hiddenCodes;
@@ -90,6 +81,14 @@ public class AppConfig {
 
         public void setHiddenCodes(List<String> hiddenCodes) {
             this.hiddenCodes = hiddenCodes;
+        }
+
+        /**
+         * 國外分進(9900) 是否包含在合計中。
+         * 由 hidden-codes 統一控制：9900 不在 hidden-codes 裡就包含。
+         */
+        public boolean isIncludeOverseasReinsurance() {
+            return !hiddenCodes.contains("9900");
         }
     }
 

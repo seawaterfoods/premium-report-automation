@@ -5,6 +5,7 @@ import com.insurance.report.config.AppConfig;
 import com.insurance.report.model.*;
 import com.insurance.report.model.CategoryMapping.SubCategory;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -192,6 +193,10 @@ public class PremiumReportWriter {
 
         // 凍結窗格: 固定前 2 列 (表頭) + 前 3 欄 (代號/月份/公司)
         sheet.createFreezePane(3, 2);
+
+        // 自動篩選: 表頭列(row 1)至最後資料列
+        int lastDataRow = sheet.getLastRowNum();
+        sheet.setAutoFilter(new CellRangeAddress(1, lastDataRow, 0, totalCol));
     }
 
     /** 總表固定使用全部 16 子分類 (含國外分進) */
