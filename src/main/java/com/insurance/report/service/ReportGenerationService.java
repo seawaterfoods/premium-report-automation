@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -146,7 +147,9 @@ public class ReportGenerationService {
 
         // Step 4: 輸出 Excel
         log.info("Step 4: 輸出 Excel");
-        Path outputDir = Paths.get(config.getOutputDir());
+        int yearMonth = year * 100 + latestMonth;
+        Path outputDir = Paths.get(config.getOutputDir()).resolve(String.format("%05d", yearMonth));
+        Files.createDirectories(outputDir);
 
         // 報表一：保費統計表
         String report1Name = String.format("%d年產險業務(簽單)保費統計表.xlsx", year);
@@ -158,7 +161,6 @@ public class ReportGenerationService {
                 outputDir.resolve(report1Name));
 
         // 報表二：同期比較分析表
-        int yearMonth = year * 100 + latestMonth;
         int priorYearMonth = priorYear * 100 + latestMonth;
         String report2Name = String.format("%05dvs%05d同期比較分析表.xlsx", yearMonth, priorYearMonth);
         comparisonWriter.write(year, latestMonth,

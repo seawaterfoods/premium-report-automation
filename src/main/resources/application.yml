@@ -15,12 +15,6 @@ app:
   # 公司排序方式：BY_CODE_ASC | BY_CODE_DESC | BY_NAME
   company-order: BY_CODE_ASC
 
-logging:
-  level:
-    com.insurance.report: INFO
-  file:
-    name: ./output/report.log
-
 spring:
   main:
     banner-mode: off
