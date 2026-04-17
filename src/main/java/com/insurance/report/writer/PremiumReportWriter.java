@@ -120,59 +120,70 @@ public class PremiumReportWriter {
         }
         createCell(row1, 3 + codes.size(), "合計", styles.getHeaderStyle());
 
-        // 資料列
-        long[] grandTotal = new long[codes.size() + 1]; // 總計
+        int firstCodeCol = 3;
+        int lastCodeCol = 3 + codes.size() - 1;
+        int totalCol = 3 + codes.size();
+
+        // 追蹤小計列行號 (供總計公式用)
+        List<Integer> subtotalRows = new ArrayList<>();
 
         for (int period = 1; period <= maxPeriod; period++) {
             List<CompanyMonthData> periodData = data.get(period);
             if (periodData == null) continue;
 
             String periodLabel = isCumulative ? CumulativeCalculator.getPeriodLabel(period) : String.valueOf(period);
+            int periodFirstRow = rowIdx;
 
             // 各公司
             for (CompanyMonthData cd : periodData) {
-                Row row = sheet.createRow(rowIdx++);
+                Row row = sheet.createRow(rowIdx);
                 createCell(row, 0, cd.getCompanyCode(), styles.getCompanyStyle());
                 createCell(row, 1, periodLabel, styles.getCompanyStyle());
                 createCell(row, 2, cd.getCompanyName(), styles.getCompanyStyle());
                 for (int i = 0; i < codes.size(); i++) {
                     createCell(row, 3 + i, cd.getPremium(codes.get(i)), styles.getNumberStyle());
                 }
-                createCell(row, 3 + codes.size(), cd.getTotal(), styles.getNumberStyle());
+                // 合計 = SUM(D:AJ)
+                String sumFormula = String.format("SUM(%s:%s)",
+                        cellRef(firstCodeCol, rowIdx), cellRef(lastCodeCol, rowIdx));
+                createFormulaCell(row, totalCol, sumFormula, styles.getNumberStyle());
+                rowIdx++;
             }
 
-            // 小計列
-            CompanyMonthData subtotal = subtotals.get(period);
-            if (subtotal != null) {
-                Row stRow = sheet.createRow(rowIdx++);
+            // 小計列：每欄 = SUM(該欄所有公司列)
+            if (subtotals.get(period) != null && periodFirstRow < rowIdx) {
+                Row stRow = sheet.createRow(rowIdx);
                 createCell(stRow, 0, "", styles.getSubtotalStyle());
                 createCell(stRow, 1, periodLabel, styles.getSubtotalStyle());
                 createCell(stRow, 2, "小計", styles.getSubtotalStyle());
-                for (int i = 0; i < codes.size(); i++) {
-                    long val = subtotal.getPremium(codes.get(i));
-                    createCell(stRow, 3 + i, val, styles.getSubtotalNumberStyle());
-                    grandTotal[i] += val;
+                for (int c = firstCodeCol; c <= totalCol; c++) {
+                    String formula = String.format("SUM(%s:%s)",
+                            cellRef(c, periodFirstRow), cellRef(c, rowIdx - 1));
+                    createFormulaCell(stRow, c, formula, styles.getSubtotalNumberStyle());
                 }
-                long stTotal = subtotal.getTotal();
-                createCell(stRow, 3 + codes.size(), stTotal, styles.getSubtotalNumberStyle());
-                grandTotal[codes.size()] += stTotal;
+                subtotalRows.add(rowIdx);
+                rowIdx++;
             }
         }
 
-        // 總計列 (僅單月表，累計表不需要)
-        if (!isCumulative) {
+        // 總計列 (僅單月表)：每欄 = 所有小計列的 SUM
+        if (!isCumulative && !subtotalRows.isEmpty()) {
             Row totalRow = sheet.createRow(rowIdx);
             createCell(totalRow, 0, "", styles.getSubtotalStyle());
             createCell(totalRow, 1, "總計", styles.getSubtotalStyle());
             createCell(totalRow, 2, "", styles.getSubtotalStyle());
-            for (int i = 0; i < codes.size(); i++) {
-                createCell(totalRow, 3 + i, grandTotal[i], styles.getSubtotalNumberStyle());
+            for (int c = firstCodeCol; c <= totalCol; c++) {
+                StringBuilder formula = new StringBuilder();
+                for (int i = 0; i < subtotalRows.size(); i++) {
+                    if (i > 0) formula.append("+");
+                    formula.append(cellRef(c, subtotalRows.get(i)));
+                }
+                createFormulaCell(totalRow, c, formula.toString(), styles.getSubtotalNumberStyle());
             }
-            createCell(totalRow, 3 + codes.size(), grandTotal[codes.size()], styles.getSubtotalNumberStyle());
         }
 
         // 自動欄寬
-        for (int c = 0; c <= 3 + codes.size(); c++) {
+        for (int c = 0; c <= totalCol; c++) {
             sheet.setColumnWidth(c, c <= 2 ? 4000 : 3500);
         }
     }
@@ -290,86 +301,106 @@ public class PremiumReportWriter {
 
         // === 資料列 (從 row 5 開始) ===
         int rowIdx = 5;
-        long[] grandTotal = new long[TOTAL_CATS + 3];
+
+        // T 欄 SUM 範圍取決於是否含國外分進
+        int totalSumEndCol = config.getColumns().isIncludeOverseasReinsurance()
+                ? FIRST_DATA_COL + TOTAL_CATS - 1   // S 欄
+                : FIRST_DATA_COL + TOTAL_CATS - 2;  // R 欄
+
+        // 追蹤小計列行號 (供總計公式用)
+        List<Integer> subtotalRows = new ArrayList<>();
 
         for (int period = 1; period <= maxPeriod; period++) {
             List<CompanyMonthData> periodData = data.get(period);
             if (periodData == null) continue;
 
             String periodLabel = isCumulative ? CumulativeCalculator.getPeriodLabel(period) : String.valueOf(period);
+            int periodFirstRow = rowIdx;
 
             for (CompanyMonthData cd : periodData) {
-                Row row = sheet.createRow(rowIdx++);
+                Row row = sheet.createRow(rowIdx);
                 createCell(row, 0, cd.getCompanyCode(), styles.getCompanyStyle());
                 createCell(row, 1, periodLabel, styles.getCompanyStyle());
                 createCell(row, 2, cd.getCompanyName(), styles.getCompanyStyle());
 
                 Map<String, Long> catAmounts = categoryCalculator.calculateAllSubCategories(cd);
-                long currentTotal = categoryCalculator.calculateOutputTotal(catAmounts);
 
                 int col = FIRST_DATA_COL;
                 for (SubCategory sub : ALL_SUMMARY_CATS) {
                     createCell(row, col++, catAmounts.getOrDefault(sub.getName(), 0L), styles.getNumberStyle());
                 }
-                createCell(row, tCol, currentTotal, styles.getNumberStyle());
+                // T 今年合計 = SUM(D:S 或 D:R)
+                String tFormula = String.format("SUM(%s:%s)",
+                        cellRef(FIRST_DATA_COL, rowIdx), cellRef(totalSumEndCol, rowIdx));
+                createFormulaCell(row, tCol, tFormula, styles.getNumberStyle());
                 createCell(row, uCol, "", styles.getCompanyStyle());
                 createCell(row, vCol, "", styles.getCompanyStyle());
+                rowIdx++;
             }
 
             // 小計列
             CompanyMonthData subtotal = subtotals.get(period);
-            if (subtotal != null) {
-                Row stRow = sheet.createRow(rowIdx++);
+            if (subtotal != null && periodFirstRow < rowIdx) {
+                Row stRow = sheet.createRow(rowIdx);
                 createCell(stRow, 0, "", styles.getSubtotalStyle());
                 createCell(stRow, 1, periodLabel, styles.getSubtotalStyle());
                 createCell(stRow, 2, "小計", styles.getSubtotalStyle());
 
-                Map<String, Long> catAmounts = categoryCalculator.calculateAllSubCategories(subtotal);
-                long currentTotal = categoryCalculator.calculateOutputTotal(catAmounts);
+                // 各子分類 = SUM(該欄所有公司列)
+                for (int c = FIRST_DATA_COL; c < FIRST_DATA_COL + TOTAL_CATS; c++) {
+                    String formula = String.format("SUM(%s:%s)",
+                            cellRef(c, periodFirstRow), cellRef(c, rowIdx - 1));
+                    createFormulaCell(stRow, c, formula, styles.getSubtotalNumberStyle());
+                }
 
+                // T 今年合計 = SUM(D:S 或 D:R)
+                String tFormula = String.format("SUM(%s:%s)",
+                        cellRef(FIRST_DATA_COL, rowIdx), cellRef(totalSumEndCol, rowIdx));
+                createFormulaCell(stRow, tCol, tFormula, styles.getSubtotalNumberStyle());
+
+                // U 去年合計
                 CompanyMonthData priorSub = priorSubtotals != null ? priorSubtotals.get(period) : null;
                 Map<String, Long> priorCatAmounts = priorSub != null
                         ? categoryCalculator.calculateAllSubCategories(priorSub) : Collections.emptyMap();
                 long priorTotal = priorSub != null ? categoryCalculator.calculateOutputTotal(priorCatAmounts) : 0;
-
-                int col = FIRST_DATA_COL;
-                for (int i = 0; i < ALL_SUMMARY_CATS.size(); i++) {
-                    long val = catAmounts.getOrDefault(ALL_SUMMARY_CATS.get(i).getName(), 0L);
-                    createCell(stRow, col++, val, styles.getSubtotalNumberStyle());
-                    grandTotal[i] += val;
-                }
-
-                createCell(stRow, tCol, currentTotal, styles.getSubtotalNumberStyle());
                 createCell(stRow, uCol, priorTotal, styles.getSubtotalNumberStyle());
-                grandTotal[TOTAL_CATS] += currentTotal;
-                grandTotal[TOTAL_CATS + 1] += priorTotal;
 
-                com.insurance.report.model.GrowthRateResult gr =
-                        com.insurance.report.util.GrowthRateUtil.calculate(
-                                currentTotal, priorTotal,
-                                sheetName + "/" + periodLabel + "/小計");
-                createCell(stRow, vCol, gr.getRate(), styles.getPercentStyle());
+                // V 成長率 = IF(U<=0, NA(), (T-U)/U)
+                String tRef = cellRef(tCol, rowIdx);
+                String uRef = cellRef(uCol, rowIdx);
+                String grFormula = String.format("IF(%s<=0,NA(),(%s-%s)/%s)", uRef, tRef, uRef, uRef);
+                createFormulaCell(stRow, vCol, grFormula, styles.getPercentStyle());
+
+                subtotalRows.add(rowIdx);
+                rowIdx++;
             }
         }
 
         // 總計列 (僅單月表)
-        if (!isCumulative) {
+        if (!isCumulative && !subtotalRows.isEmpty()) {
             Row totalRow = sheet.createRow(rowIdx);
             createCell(totalRow, 0, "", styles.getSubtotalStyle());
             createCell(totalRow, 1, "總計", styles.getSubtotalStyle());
             createCell(totalRow, 2, "", styles.getSubtotalStyle());
-            int col = FIRST_DATA_COL;
-            for (int i = 0; i < TOTAL_CATS; i++) {
-                createCell(totalRow, col++, grandTotal[i], styles.getSubtotalNumberStyle());
-            }
-            createCell(totalRow, tCol, grandTotal[TOTAL_CATS], styles.getSubtotalNumberStyle());
-            createCell(totalRow, uCol, grandTotal[TOTAL_CATS + 1], styles.getSubtotalNumberStyle());
 
-            com.insurance.report.model.GrowthRateResult totalGr =
-                    com.insurance.report.util.GrowthRateUtil.calculate(
-                            grandTotal[TOTAL_CATS], grandTotal[TOTAL_CATS + 1],
-                            sheetName + "/總計");
-            createCell(totalRow, vCol, totalGr.getRate(), styles.getPercentStyle());
+            // 各子分類 + T + U = SUM of subtotal rows
+            for (int c = FIRST_DATA_COL; c <= uCol; c++) {
+                StringBuilder formula = new StringBuilder();
+                for (int i = 0; i < subtotalRows.size(); i++) {
+                    if (i > 0) formula.append("+");
+                    formula.append(cellRef(c, subtotalRows.get(i)));
+                }
+                createFormulaCell(totalRow, c,
+                        formula.toString(),
+                        c <= FIRST_DATA_COL + TOTAL_CATS - 1
+                                ? styles.getSubtotalNumberStyle() : styles.getSubtotalNumberStyle());
+            }
+
+            // V 成長率 = IF(U<=0, NA(), (T-U)/U)
+            String tRef = cellRef(tCol, rowIdx);
+            String uRef = cellRef(uCol, rowIdx);
+            String grFormula = String.format("IF(%s<=0,NA(),(%s-%s)/%s)", uRef, tRef, uRef, uRef);
+            createFormulaCell(totalRow, vCol, grFormula, styles.getPercentStyle());
         }
 
         // 欄寬

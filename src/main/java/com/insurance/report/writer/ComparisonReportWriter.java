@@ -1,9 +1,8 @@
 package com.insurance.report.writer;
 
-import com.insurance.report.calculator.ComparisonCalculator;
 import com.insurance.report.model.CategoryMapping;
 import com.insurance.report.model.CategoryMapping.SubCategory;
-import com.insurance.report.model.GrowthRateResult;
+import com.insurance.report.calculator.ComparisonCalculator;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
@@ -37,6 +36,10 @@ public class ComparisonReportWriter {
             CATEGORY_NAMES.add(sub.getName());
         }
     }
+
+    // 寫入期間追蹤：比較增減率 sheet 中成長率列的 0-based 行號 (供增減原因公式引用)
+    private int monthlyGrowthRateRow;
+    private int cumulativeGrowthRateRow;
 
     /**
      * 產生同期比較分析表
@@ -98,28 +101,27 @@ public class ComparisonReportWriter {
         rowIdx++;
 
         // === 區段一：單月比較 (Row 7-11) ===
-        // Row 7: 去年同月
-        rowIdx = writeComparisonDataRow(sheet, styles, rowIdx,
-                String.format("%d/%d", priorYear, month),
-                monthly.getPriorValues(), null, false);
+        int priorRow = rowIdx;    // row 7 (0-based 6)
+        rowIdx = writeValueRow(sheet, styles, rowIdx,
+                String.format("%d/%d", priorYear, month), monthly.getPriorValues());
 
-        // Row 8: 今年同月
-        rowIdx = writeComparisonDataRow(sheet, styles, rowIdx,
-                String.format("%d/%d", year, month),
-                monthly.getCurrentValues(), null, false);
+        int currentRow = rowIdx;  // row 8 (0-based 7)
+        rowIdx = writeValueRow(sheet, styles, rowIdx,
+                String.format("%d/%d", year, month), monthly.getCurrentValues());
 
-        // Row 9: 佔月比重
-        rowIdx = writeComparisonDataRow(sheet, styles, rowIdx,
-                String.format("佔%d月比重", month),
-                null, monthly.getProportions(), true);
+        // Row 9: 佔比 (引用今年列)
+        rowIdx = writeProportionRow(sheet, styles, rowIdx,
+                String.format("佔%d月比重", month), currentRow);
 
-        // Row 10: 同期增減($)
-        rowIdx = writeComparisonDataRow(sheet, styles, rowIdx,
-                "同期增減($)", monthly.getDifferences(), null, false);
+        // Row 10: 增減($) = 今年 - 去年
+        int diffRow = rowIdx;
+        rowIdx = writeDifferenceRow(sheet, styles, rowIdx,
+                "同期增減($)", currentRow, priorRow);
 
-        // Row 11: 同期增減(%)
+        // Row 11: 增減(%) = IF(去年<0, NA(), 增減/ABS(去年))
+        monthlyGrowthRateRow = rowIdx;
         rowIdx = writeGrowthRateRow(sheet, styles, rowIdx,
-                "同期增減(%)", monthly.getGrowthRates());
+                "同期增減(%)", priorRow, diffRow);
 
         // Row 12-13: 空白
         rowIdx += 2;
@@ -135,28 +137,27 @@ public class ComparisonReportWriter {
         rowIdx++;
 
         // === 區段二：累計比較 (Row 18-22) ===
-        // Row 18: 去年累計
-        rowIdx = writeComparisonDataRow(sheet, styles, rowIdx,
-                String.format("%d/1-%d", priorYear, month),
-                cumulative.getPriorValues(), null, false);
+        int cumPriorRow = rowIdx;
+        rowIdx = writeValueRow(sheet, styles, rowIdx,
+                String.format("%d/1-%d", priorYear, month), cumulative.getPriorValues());
 
-        // Row 19: 今年累計
-        rowIdx = writeComparisonDataRow(sheet, styles, rowIdx,
-                String.format("%d/1-%d", year, month),
-                cumulative.getCurrentValues(), null, false);
+        int cumCurrentRow = rowIdx;
+        rowIdx = writeValueRow(sheet, styles, rowIdx,
+                String.format("%d/1-%d", year, month), cumulative.getCurrentValues());
 
-        // Row 20: 佔累計比重
-        rowIdx = writeComparisonDataRow(sheet, styles, rowIdx,
-                String.format("佔1-%d月累計比重", month),
-                null, cumulative.getProportions(), true);
+        // 佔累計比重
+        rowIdx = writeProportionRow(sheet, styles, rowIdx,
+                String.format("佔1-%d月累計比重", month), cumCurrentRow);
 
-        // Row 21: 同期增減($)
-        rowIdx = writeComparisonDataRow(sheet, styles, rowIdx,
-                "同期增減($)", cumulative.getDifferences(), null, false);
+        // 累計增減($)
+        int cumDiffRow = rowIdx;
+        rowIdx = writeDifferenceRow(sheet, styles, rowIdx,
+                "同期增減($)", cumCurrentRow, cumPriorRow);
 
-        // Row 22: 同期增減(%)
+        // 累計增減(%)
+        cumulativeGrowthRateRow = rowIdx;
         writeGrowthRateRow(sheet, styles, rowIdx,
-                "同期增減(%)", cumulative.getGrowthRates());
+                "同期增減(%)", cumPriorRow, cumDiffRow);
 
         // 欄寬
         sheet.setColumnWidth(0, 5000);
@@ -227,50 +228,72 @@ public class ComparisonReportWriter {
         return startRow + 3;
     }
 
-    private int writeComparisonDataRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
-                                        String label,
-                                        Map<String, Long> longValues,
-                                        Map<String, Double> doubleValues,
-                                        boolean isPercent) {
+    /**
+     * 寫入數值列 (去年/今年金額)：值直接寫入 B-P，合計 Q = SUM(B:P) 公式
+     */
+    private int writeValueRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
+                              String label, Map<String, Long> values) {
         Row row = sheet.createRow(rowIdx);
         createCell(row, 0, label, styles.getCompanyStyle());
 
         int col = 1;
         for (String catName : CATEGORY_NAMES) {
-            if (isPercent && doubleValues != null) {
-                createCell(row, col, doubleValues.getOrDefault(catName, 0.0), styles.getPercentStyle());
-            } else if (longValues != null) {
-                createCell(row, col, longValues.getOrDefault(catName, 0L), styles.getNumberStyle());
-            }
+            createCell(row, col, values.getOrDefault(catName, 0L), styles.getNumberStyle());
             col++;
         }
-        // 合計
-        if (isPercent && doubleValues != null) {
-            createCell(row, col, doubleValues.getOrDefault("合計", 1.0), styles.getPercentStyle());
-        } else if (longValues != null) {
-            createCell(row, col, longValues.getOrDefault("合計", 0L), styles.getNumberStyle());
-        }
-
+        // Q 合計 = SUM(B:P)
+        String sumFormula = String.format("SUM(%s:%s)",
+                cellRef(1, rowIdx), cellRef(CATEGORY_NAMES.size(), rowIdx));
+        createFormulaCell(row, col, sumFormula, styles.getNumberStyle());
         return rowIdx + 1;
     }
 
-    private int writeGrowthRateRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
-                                    String label,
-                                    Map<String, GrowthRateResult> rates) {
+    /**
+     * 寫入佔比列：公式 = 各 cell / $Q$currentRow，合計 Q = SUM(B:P)
+     */
+    private int writeProportionRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
+                                    String label, int currentValueRowIdx) {
         Row row = sheet.createRow(rowIdx);
         createCell(row, 0, label, styles.getCompanyStyle());
-
-        int col = 1;
-        for (String catName : CATEGORY_NAMES) {
-            GrowthRateResult gr = rates.get(catName);
-            double rate = gr != null ? gr.getRate() : 0.0;
-            createCell(row, col, rate, styles.getPercentStyle());
-            col++;
+        String totalRef = "$" + colLetter(CATEGORY_NAMES.size() + 1) + "$" + (currentValueRowIdx + 1);
+        for (int col = 1; col <= CATEGORY_NAMES.size(); col++) {
+            String formula = cellRef(col, currentValueRowIdx) + "/" + totalRef;
+            createFormulaCell(row, col, formula, styles.getPercentStyle());
         }
-        // 合計
-        GrowthRateResult totalGr = rates.get("合計");
-        createCell(row, col, totalGr != null ? totalGr.getRate() : 0.0, styles.getPercentStyle());
+        // Q = SUM(B:P)
+        String sumFormula = String.format("SUM(%s:%s)",
+                cellRef(1, rowIdx), cellRef(CATEGORY_NAMES.size(), rowIdx));
+        createFormulaCell(row, CATEGORY_NAMES.size() + 1, sumFormula, styles.getPercentStyle());
+        return rowIdx + 1;
+    }
 
+    /**
+     * 寫入增減($)列：公式 = 今年 - 去年，合計 Q = Q今年 - Q去年
+     */
+    private int writeDifferenceRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
+                                    String label, int currentRowIdx, int priorRowIdx) {
+        Row row = sheet.createRow(rowIdx);
+        createCell(row, 0, label, styles.getCompanyStyle());
+        for (int col = 1; col <= CATEGORY_NAMES.size() + 1; col++) {
+            String formula = cellRef(col, currentRowIdx) + "-" + cellRef(col, priorRowIdx);
+            createFormulaCell(row, col, formula, styles.getNumberStyle());
+        }
+        return rowIdx + 1;
+    }
+
+    /**
+     * 寫入增減(%)列：公式 = IF(去年<0, NA(), 增減/ABS(去年))
+     */
+    private int writeGrowthRateRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
+                                    String label, int priorRowIdx, int diffRowIdx) {
+        Row row = sheet.createRow(rowIdx);
+        createCell(row, 0, label, styles.getCompanyStyle());
+        for (int col = 1; col <= CATEGORY_NAMES.size() + 1; col++) {
+            String priorRef = cellRef(col, priorRowIdx);
+            String diffRef = cellRef(col, diffRowIdx);
+            String formula = String.format("IF(%s<0,NA(),%s/ABS(%s))", priorRef, diffRef, priorRef);
+            createFormulaCell(row, col, formula, styles.getPercentStyle());
+        }
         return rowIdx + 1;
     }
 
@@ -337,36 +360,52 @@ public class ComparisonReportWriter {
 
         int dataStartRow = rowIdx; // row 3 (0-based)
 
-        // 15 類 × 2 列 (累計 + 單月)
+        // 第一對使用文字值，後續用公式引用
         String cumPeriod = String.format("1-%d月", month);
         String monPeriod = String.format("%d月", month);
+        int firstCumRow = dataStartRow;     // 第一個累計列的 0-based 行號
+        int firstMonRow = dataStartRow + 1; // 第一個單月列的 0-based 行號
 
-        // 成長率公式引用行號: 比較增減率 sheet 中
-        // 單月成長率在 row 11 (1-based), 累計成長率在 row 22 (1-based)
-        // 但我們用計算值，因為行號可能不固定
+        // 比較增減率 sheet 中的成長率列 (1-based, 供 cross-sheet formula)
+        int cumGrowthExcelRow = cumulativeGrowthRateRow + 1;
+        int monGrowthExcelRow = monthlyGrowthRateRow + 1;
 
-        for (String[] cat : REASON_CATEGORIES) {
+        boolean isFirst = true;
+        for (int catIdx = 0; catIdx < REASON_CATEGORIES.length; catIdx++) {
+            String[] cat = REASON_CATEGORIES[catIdx];
             String majorGroup = cat[0];
             String subGroup = cat[1];
-            String catName = getCategoryNameForReason(cat);
+            String compColLetter = colLetter(catIdx + 1); // B, C, D, ..., P
 
             // 累計列
-            GrowthRateResult cumGr = cumulative.getGrowthRates().get(catName);
             Row cumRow = sheet.createRow(rowIdx++);
             createCell(cumRow, 0, majorGroup, styles.getCompanyStyle());
             createCell(cumRow, 1, subGroup, styles.getCompanyStyle());
-            createCell(cumRow, 2, cumPeriod, styles.getCompanyStyle());
-            createCell(cumRow, 3, cumGr != null ? cumGr.getRate() : 0.0, styles.getPercentStyle());
+            if (isFirst) {
+                createCell(cumRow, 2, cumPeriod, styles.getCompanyStyle());
+            } else {
+                createFormulaCell(cumRow, 2, cellRef(2, firstCumRow), styles.getCompanyStyle());
+            }
+            // D: 成長率 = 比較增減率!{col}{cumGrowthRow}
+            String cumFormula = String.format("比較增減率!%s%d", compColLetter, cumGrowthExcelRow);
+            createFormulaCell(cumRow, 3, cumFormula, styles.getPercentStyle());
             createCell(cumRow, 4, "", styles.getCompanyStyle());
 
             // 單月列
-            GrowthRateResult monGr = monthly.getGrowthRates().get(catName);
             Row monRow = sheet.createRow(rowIdx++);
             createCell(monRow, 0, "", styles.getCompanyStyle());
             createCell(monRow, 1, "", styles.getCompanyStyle());
-            createCell(monRow, 2, monPeriod, styles.getCompanyStyle());
-            createCell(monRow, 3, monGr != null ? monGr.getRate() : 0.0, styles.getPercentStyle());
+            if (isFirst) {
+                createCell(monRow, 2, monPeriod, styles.getCompanyStyle());
+            } else {
+                createFormulaCell(monRow, 2, cellRef(2, firstMonRow), styles.getCompanyStyle());
+            }
+            // D: 成長率 = 比較增減率!{col}{monGrowthRow}
+            String monFormula = String.format("比較增減率!%s%d", compColLetter, monGrowthExcelRow);
+            createFormulaCell(monRow, 3, monFormula, styles.getPercentStyle());
             createCell(monRow, 4, "", styles.getCompanyStyle());
+
+            isFirst = false;
         }
 
         // 合併大類儲存格
@@ -377,12 +416,9 @@ public class ComparisonReportWriter {
             int mergeEndRow = dataStartRow + endIdx * 2 - 1;
 
             if (endIdx - startIdx == 1) {
-                // 獨立大類 (火/水/航/傷/天/健): A:B 合併
                 mergeRegion(sheet, mergeStartRow, mergeEndRow, 0, 1);
             } else {
-                // 有子類的大類 (汽車/意外): A 欄合併
                 mergeRegion(sheet, mergeStartRow, mergeEndRow, 0, 0);
-                // 各子類 B 欄合併 (每子類 2 行)
                 for (int i = startIdx; i < endIdx; i++) {
                     int subStart = dataStartRow + i * 2;
                     mergeRegion(sheet, subStart, subStart + 1, 1, 1);
@@ -397,30 +433,4 @@ public class ComparisonReportWriter {
         sheet.setColumnWidth(4, 12000);
     }
 
-    /**
-     * 從 REASON_CATEGORIES 定義中找出對應的 CATEGORY_NAMES 名稱
-     */
-    private String getCategoryNameForReason(String[] cat) {
-        String majorGroup = cat[0];
-        String subGroup = cat[1];
-        // 大類名稱對照
-        if (subGroup.isEmpty()) {
-            // 獨立大類: 直接用大類名 → 對應 CATEGORY_NAMES
-            if (majorGroup.equals("航空")) return "航空險";
-            return majorGroup;
-        }
-        // 子類名稱對照
-        return switch (subGroup) {
-            case "車體損" -> "車體損失險";
-            case "任意車責" -> "任意責任險";
-            case "強制車" -> "強制責任-汽車";
-            case "強制機" -> "強制-機車";
-            case "強制電動二輪" -> "強制-電動二輪";
-            case "責任險" -> "責任險";
-            case "工程險" -> "工程險";
-            case "信用保險" -> "信用保證";
-            case "其他責任險" -> "其他財產責任保險";
-            default -> subGroup;
-        };
-    }
 }

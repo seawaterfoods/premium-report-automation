@@ -147,6 +147,36 @@ public class ExcelStyleHelper {
         return cell;
     }
 
+    /** 建立公式儲存格 */
+    public static Cell createFormulaCell(Row row, int col, String formula, CellStyle style) {
+        Cell cell = row.createCell(col);
+        cell.setCellFormula(formula);
+        if (style != null) cell.setCellStyle(style);
+        return cell;
+    }
+
+    /**
+     * 0-based 欄位索引 → Excel 欄位字母 (A, B, ..., Z, AA, AB, ...)
+     */
+    public static String colLetter(int colIndex) {
+        StringBuilder sb = new StringBuilder();
+        int idx = colIndex;
+        while (idx >= 0) {
+            sb.insert(0, (char) ('A' + idx % 26));
+            idx = idx / 26 - 1;
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 產生儲存格參考 (e.g., "D6")
+     * @param col 0-based 欄位索引
+     * @param row 0-based 列索引
+     */
+    public static String cellRef(int col, int row) {
+        return colLetter(col) + (row + 1);
+    }
+
     /** 合併儲存格 */
     public static void mergeRegion(Sheet sheet, int firstRow, int lastRow, int firstCol, int lastCol) {
         if (firstRow == lastRow && firstCol == lastCol) return;
