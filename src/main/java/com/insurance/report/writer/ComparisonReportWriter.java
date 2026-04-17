@@ -168,22 +168,63 @@ public class ComparisonReportWriter {
     private int writeComparisonHeaders(Sheet sheet, ExcelStyleHelper styles, int startRow) {
         Row h1 = sheet.createRow(startRow);
         Row h2 = sheet.createRow(startRow + 1);
+        Row h3 = sheet.createRow(startRow + 2);
 
-        createCell(h1, 0, "", styles.getHeaderStyle());
+        // A: 年/月 險種 (span 3 rows)
+        createCell(h1, 0, "年/月   險種", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow, startRow + 2, 0, 0);
 
-        // B~P: 15 類
-        int col = 1;
-        for (SubCategory sub : COMPARISON_CATEGORIES) {
-            createCell(h1, col, sub.getName(), styles.getHeaderStyle());
-            mergeRegion(sheet, startRow, startRow + 1, col, col);
-            col++;
-        }
+        // B=火險(1), C=水險(2), D=航空險(3): 獨立跨 3 行
+        createCell(h1, 1, "火險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow, startRow + 2, 1, 1);
+        createCell(h1, 2, "水險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow, startRow + 2, 2, 2);
+        createCell(h1, 3, "航空險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow, startRow + 2, 3, 3);
 
-        // Q: 合計
-        createCell(h1, col, "合計", styles.getHeaderStyle());
-        mergeRegion(sheet, startRow, startRow + 1, col, col);
+        // E-I=汽車險 (cols 4-8): 合併 row h1
+        createCell(h1, 4, "汽車險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow, startRow, 4, 8);
+        // E=車體損失保險(4), F=任意責任險(5): 跨 h2-h3
+        createCell(h2, 4, "車體損失保險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow + 1, startRow + 2, 4, 4);
+        createCell(h2, 5, "任意責任險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow + 1, startRow + 2, 5, 5);
+        // G-I=強制責任險 (cols 6-8): 合併 row h2
+        createCell(h2, 6, "強制責任險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow + 1, startRow + 1, 6, 8);
+        // G=汽車, H=機車, I=電動二輪車: row h3
+        createCell(h3, 6, "汽車", styles.getSubHeaderStyle());
+        createCell(h3, 7, "機車", styles.getSubHeaderStyle());
+        createCell(h3, 8, "電動二輪車", styles.getSubHeaderStyle());
 
-        return startRow + 2;
+        // J-M=意外險 (cols 9-12): 合併 row h1
+        createCell(h1, 9, "意外險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow, startRow, 9, 12);
+        // J=責任險(9), K=工程險(10), L=信用保證(11): 跨 h2-h3
+        createCell(h2, 9, "責任險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow + 1, startRow + 2, 9, 9);
+        createCell(h2, 10, "工程險", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow + 1, startRow + 2, 10, 10);
+        createCell(h2, 11, "信用保證", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow + 1, startRow + 2, 11, 11);
+        // M=其他財產(12) row h2 + 責任保險 row h3
+        createCell(h2, 12, "其他財產", styles.getHeaderStyle());
+        createCell(h3, 12, "責任保險", styles.getSubHeaderStyle());
+
+        // N=傷害險(13), O=天災險(14), P=健康險(15): row h2 only
+        createCell(h2, 13, "傷害險", styles.getHeaderStyle());
+        createCell(h2, 14, "天災險", styles.getHeaderStyle());
+        createCell(h2, 15, "健康險", styles.getHeaderStyle());
+
+        // Q=合計(16): 跨 h1-h2
+        createCell(h1, 16, "合計", styles.getHeaderStyle());
+        mergeRegion(sheet, startRow, startRow + 1, 16, 16);
+
+        // 填充邊框
+        styles.fillBorders(sheet, startRow, startRow + 2, 0, 16);
+
+        return startRow + 3;
     }
 
     private int writeComparisonDataRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
@@ -235,6 +276,40 @@ public class ComparisonReportWriter {
 
     // ==================== Sheet 2: 增減原因 ====================
 
+    /**
+     * 增減原因結構定義
+     * [0]=大類名稱, [1]=子類顯示名, [2]=比較增減率欄位字母 (用於公式引用)
+     */
+    private static final String[][] REASON_CATEGORIES = {
+            {"火險", "", "B"},
+            {"水險", "", "C"},
+            {"航空", "", "D"},
+            {"汽車險", "車體損", "E"},
+            {"", "任意車責", "F"},
+            {"", "強制車", "G"},
+            {"", "強制機", "H"},
+            {"", "強制電動二輪", "I"},
+            {"意外險", "責任險", "J"},
+            {"", "工程險", "K"},
+            {"", "信用保險", "L"},
+            {"", "其他責任險", "M"},
+            {"傷害險", "", "N"},
+            {"天災險", "", "O"},
+            {"健康險", "", "P"},
+    };
+
+    /** 增減原因的大類 A 欄合併區域 (起始分類索引, 結束分類索引 exclusive) */
+    private static final int[][] REASON_MAJOR_GROUPS = {
+            {0, 1},    // 火險
+            {1, 2},    // 水險
+            {2, 3},    // 航空
+            {3, 8},    // 汽車險 (5 子類)
+            {8, 12},   // 意外險 (4 子類)
+            {12, 13},  // 傷害險
+            {13, 14},  // 天災險
+            {14, 15},  // 健康險
+    };
+
     private void writeReasonSheet(Workbook wb, ExcelStyleHelper styles,
                                    int year, int priorYear, int month,
                                    ComparisonCalculator.ComparisonRow monthly,
@@ -242,85 +317,110 @@ public class ComparisonReportWriter {
         Sheet sheet = wb.createSheet("增減原因");
         int rowIdx = 0;
 
-        // 標題
+        // Row 0: 標題 (跨 A:E)
         Row titleRow = sheet.createRow(rowIdx++);
-        String title = String.format("中華民國%d年與%d年產物保險業保費同期比較增減原因", year, priorYear);
+        String title = String.format("%d年與%d年產物保險業保費同期比較統計表\n保費收入、成長率及其增減原因分析如后：",
+                year, priorYear);
         createCell(titleRow, 0, title, styles.getTitleStyle());
         mergeRegion(sheet, 0, 0, 0, 4);
 
-        // 空白
+        // Row 1: 空白
         rowIdx++;
 
-        // 表頭
+        // Row 2: 表頭 (險種 A:B 合併 / 月份 C / 成長率 D / 增減原因 E)
         Row header = sheet.createRow(rowIdx++);
-        createCell(header, 0, "險種大類", styles.getHeaderStyle());
-        createCell(header, 1, "險種子類", styles.getHeaderStyle());
-        createCell(header, 2, "月份區間", styles.getHeaderStyle());
+        createCell(header, 0, "險種", styles.getHeaderStyle());
+        mergeRegion(sheet, rowIdx - 1, rowIdx - 1, 0, 1);
+        createCell(header, 2, "月份", styles.getHeaderStyle());
         createCell(header, 3, "成長率", styles.getHeaderStyle());
         createCell(header, 4, "增減原因", styles.getHeaderStyle());
 
+        int dataStartRow = rowIdx; // row 3 (0-based)
+
         // 15 類 × 2 列 (累計 + 單月)
-        // 大類分組: 火險, 水險, 航空, 汽車險(5子類), 意外險(4子類), 傷害險, 天災險, 健康險
-        String[][] categories = {
-                {"火險", ""},
-                {"水險", ""},
-                {"航空險", ""},
-                {"車體損失險", "車體損"},
-                {"任意責任險", "任意車責"},
-                {"強制責任-汽車", "強制車"},
-                {"強制-機車", "強制機"},
-                {"強制-電動二輪", "強制電動二輪"},
-                {"責任險", "責任險"},
-                {"工程險", "工程險"},
-                {"信用保證", "信用保險"},
-                {"其他財產責任保險", "其他責任險"},
-                {"傷害險", ""},
-                {"天災險", ""},
-                {"健康險", ""},
-        };
+        String cumPeriod = String.format("1-%d月", month);
+        String monPeriod = String.format("%d月", month);
 
-        String[] majorGroups = {"火險", "水險", "航空險", "汽車險", "汽車險", "汽車險", "汽車險", "汽車險",
-                "意外險", "意外險", "意外險", "意外險", "傷害險", "天災險", "健康險"};
+        // 成長率公式引用行號: 比較增減率 sheet 中
+        // 單月成長率在 row 11 (1-based), 累計成長率在 row 22 (1-based)
+        // 但我們用計算值，因為行號可能不固定
 
-        for (int i = 0; i < categories.length; i++) {
-            String catName = categories[i][0];
-            String displaySub = categories[i][1];
-            String majorGroup = majorGroups[i];
+        for (String[] cat : REASON_CATEGORIES) {
+            String majorGroup = cat[0];
+            String subGroup = cat[1];
+            String catName = getCategoryNameForReason(cat);
 
             // 累計列
             GrowthRateResult cumGr = cumulative.getGrowthRates().get(catName);
             Row cumRow = sheet.createRow(rowIdx++);
             createCell(cumRow, 0, majorGroup, styles.getCompanyStyle());
-            createCell(cumRow, 1, displaySub.isEmpty() ? "—" : displaySub, styles.getCompanyStyle());
-            createCell(cumRow, 2, String.format("1-%d月", month), styles.getCompanyStyle());
+            createCell(cumRow, 1, subGroup, styles.getCompanyStyle());
+            createCell(cumRow, 2, cumPeriod, styles.getCompanyStyle());
             createCell(cumRow, 3, cumGr != null ? cumGr.getRate() : 0.0, styles.getPercentStyle());
-            createCell(cumRow, 4, "", styles.getCompanyStyle()); // 增減原因留空
+            createCell(cumRow, 4, "", styles.getCompanyStyle());
 
             // 單月列
             GrowthRateResult monGr = monthly.getGrowthRates().get(catName);
             Row monRow = sheet.createRow(rowIdx++);
             createCell(monRow, 0, "", styles.getCompanyStyle());
             createCell(monRow, 1, "", styles.getCompanyStyle());
-            createCell(monRow, 2, String.format("%d月", month), styles.getCompanyStyle());
+            createCell(monRow, 2, monPeriod, styles.getCompanyStyle());
             createCell(monRow, 3, monGr != null ? monGr.getRate() : 0.0, styles.getPercentStyle());
             createCell(monRow, 4, "", styles.getCompanyStyle());
         }
 
         // 合併大類儲存格
-        int dataStart = 3;
-        int[] groupSizes = {2, 2, 2, 10, 8, 2, 2, 2}; // 火/水/航/汽車(5×2)/意外(4×2)/傷/天/健
-        int pos = dataStart;
-        for (int size : groupSizes) {
-            if (size > 1) {
-                mergeRegion(sheet, pos, pos + size - 1, 0, 0);
+        for (int[] group : REASON_MAJOR_GROUPS) {
+            int startIdx = group[0];
+            int endIdx = group[1];
+            int mergeStartRow = dataStartRow + startIdx * 2;
+            int mergeEndRow = dataStartRow + endIdx * 2 - 1;
+
+            if (endIdx - startIdx == 1) {
+                // 獨立大類 (火/水/航/傷/天/健): A:B 合併
+                mergeRegion(sheet, mergeStartRow, mergeEndRow, 0, 1);
+            } else {
+                // 有子類的大類 (汽車/意外): A 欄合併
+                mergeRegion(sheet, mergeStartRow, mergeEndRow, 0, 0);
+                // 各子類 B 欄合併 (每子類 2 行)
+                for (int i = startIdx; i < endIdx; i++) {
+                    int subStart = dataStartRow + i * 2;
+                    mergeRegion(sheet, subStart, subStart + 1, 1, 1);
+                }
             }
-            pos += size;
         }
 
-        sheet.setColumnWidth(0, 4000);
-        sheet.setColumnWidth(1, 4000);
-        sheet.setColumnWidth(2, 3500);
+        sheet.setColumnWidth(0, 3500);
+        sheet.setColumnWidth(1, 3500);
+        sheet.setColumnWidth(2, 3000);
         sheet.setColumnWidth(3, 3500);
         sheet.setColumnWidth(4, 12000);
+    }
+
+    /**
+     * 從 REASON_CATEGORIES 定義中找出對應的 CATEGORY_NAMES 名稱
+     */
+    private String getCategoryNameForReason(String[] cat) {
+        String majorGroup = cat[0];
+        String subGroup = cat[1];
+        // 大類名稱對照
+        if (subGroup.isEmpty()) {
+            // 獨立大類: 直接用大類名 → 對應 CATEGORY_NAMES
+            if (majorGroup.equals("航空")) return "航空險";
+            return majorGroup;
+        }
+        // 子類名稱對照
+        return switch (subGroup) {
+            case "車體損" -> "車體損失險";
+            case "任意車責" -> "任意責任險";
+            case "強制車" -> "強制責任-汽車";
+            case "強制機" -> "強制-機車";
+            case "強制電動二輪" -> "強制-電動二輪";
+            case "責任險" -> "責任險";
+            case "工程險" -> "工程險";
+            case "信用保險" -> "信用保證";
+            case "其他責任險" -> "其他財產責任保險";
+            default -> subGroup;
+        };
     }
 }

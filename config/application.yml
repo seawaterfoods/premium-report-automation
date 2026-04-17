@@ -9,7 +9,7 @@ app:
   # 險種欄位控制
   columns:
     # 是否在「總」表包含國外分進(9900)
-    include-overseas-reinsurance: false
+    include-overseas-reinsurance: true
     # 隱藏的險種代號清單（不列入輸出）
     hidden-codes: []
 

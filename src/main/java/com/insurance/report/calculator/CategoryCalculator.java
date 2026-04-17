@@ -45,10 +45,34 @@ public class CategoryCalculator {
     }
 
     /**
+     * 將公司月資料的 33 險種轉換為全部 16 子分類金額 (含國外分進)
+     */
+    public Map<String, Long> calculateAllSubCategories(CompanyMonthData data) {
+        Map<String, Long> result = new LinkedHashMap<>();
+        for (SubCategory sub : CategoryMapping.SUB_CATEGORIES) {
+            result.put(sub.getName(), sub.sumFrom(data));
+        }
+        result.put(CategoryMapping.OVERSEAS_REINSURANCE.getName(),
+                CategoryMapping.OVERSEAS_REINSURANCE.sumFrom(data));
+        return result;
+    }
+
+    /**
      * 計算合計 (D~R 或 D~S 加總，取決於是否包含國外分進)
      */
     public long calculateTotal(Map<String, Long> subCategoryAmounts) {
         return subCategoryAmounts.values().stream().mapToLong(Long::longValue).sum();
+    }
+
+    /**
+     * 計算輸出用合計 (依設定包含/排除國外分進)
+     */
+    public long calculateOutputTotal(Map<String, Long> allSubCategoryAmounts) {
+        long total = 0;
+        for (SubCategory sub : getOutputSubCategories()) {
+            total += allSubCategoryAmounts.getOrDefault(sub.getName(), 0L);
+        }
+        return total;
     }
 
     /**

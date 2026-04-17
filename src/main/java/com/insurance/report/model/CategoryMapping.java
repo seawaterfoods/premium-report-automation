@@ -69,10 +69,10 @@ public class CategoryMapping {
 
     static {
         Map<String, String> map = new LinkedHashMap<>();
-        map.put("0100", "一年期住宅火險");
-        map.put("0200", "長期住宅火險");
-        map.put("0300", "一年期商業火險");
-        map.put("0400", "長期商業火險");
+        map.put("0100", "一年期\n住宅火險");
+        map.put("0200", "長期\n住宅火險");
+        map.put("0300", "一年期\n商業火險");
+        map.put("0400", "長期\n商業火險");
         map.put("0500", "內陸運輸險");
         map.put("0600", "貨物運輸險");
         map.put("0700", "船體險");
@@ -98,11 +98,89 @@ public class CategoryMapping {
         map.put("2700", "商業綜險");
         map.put("2800", "颱風洪水險");
         map.put("2900", "政策地震險");
+        map.put("3000", "一年期\n健康險");
+        map.put("3100", "長年期\n健康險");
+        map.put("3200", "強制微型電動\n二輪車責險");
+        map.put("9900", "國外\n分進");
+        CODE_TO_SHORT_NAME = Collections.unmodifiableMap(map);
+    }
+
+    /**
+     * 險種代號 → 險種全名 (用於歸屬表)
+     */
+    public static final Map<String, String> CODE_TO_FULL_NAME;
+
+    static {
+        Map<String, String> map = new LinkedHashMap<>();
+        map.put("0100", "一年期住宅火災保險");
+        map.put("0200", "長期住宅火災保險");
+        map.put("0300", "一年期商業火災保險");
+        map.put("0400", "長期商業火災保險");
+        map.put("0500", "內陸運輸保險");
+        map.put("0600", "貨物運輸保險");
+        map.put("0700", "船體保險");
+        map.put("0800", "漁船保險");
+        map.put("0900", "航空保險");
+        map.put("1000", "一般自用汽車財產損失險");
+        map.put("1100", "一般商業汽車財產損失險");
+        map.put("1200", "一般自用汽車責任險");
+        map.put("1300", "一般商業汽車責任險");
+        map.put("1400", "強制自用汽車責任險");
+        map.put("1500", "強制商業汽車責任險");
+        map.put("1600", "強制機車責任險");
+        map.put("1700", "一般責任保險");
+        map.put("1800", "專業責任保險");
+        map.put("1900", "工程保險");
+        map.put("2000", "核能保險");
+        map.put("2100", "保證保險");
+        map.put("2200", "信用保險");
+        map.put("2300", "其他財產保險");
+        map.put("2400", "傷害險");
+        map.put("2500", "商業性地震險");
+        map.put("2600", "個人綜合保險");
+        map.put("2700", "商業綜合保險");
+        map.put("2800", "颱風、洪水保險");
+        map.put("2900", "政策性地震險");
         map.put("3000", "一年期健康險");
         map.put("3100", "長年期健康險");
-        map.put("3200", "強制微型電動二輪車責險");
-        map.put("9900", "國外分進");
-        CODE_TO_SHORT_NAME = Collections.unmodifiableMap(map);
+        map.put("3200", "強制微型電動二輪車責任險");
+        map.put("9900", "國外分進業務");
+        CODE_TO_FULL_NAME = Collections.unmodifiableMap(map);
+    }
+
+    /** 九大類序號 (用於歸屬表「類」欄) */
+    public static final Map<String, String> MAJOR_CATEGORY_NUMBER = Map.of(
+            "火險", "一", "水險", "二", "航空險", "三",
+            "汽車險", "四", "意外險", "五", "傷害險", "六",
+            "天災險", "七", "健康險", "八", "國外分進", "九"
+    );
+
+    /**
+     * 險種代號 → 子分組顯示名 (用於歸屬表 D 欄)
+     * 僅在子分組第一個代號處填入名稱
+     */
+    public static final Map<String, String> CODE_TO_SUB_GROUP;
+
+    static {
+        Map<String, String> map = new LinkedHashMap<>();
+        map.put("1000", "車體損");
+        map.put("1200", "任意車責");
+        map.put("1400", "強制車");
+        map.put("1600", "強制機");
+        map.put("1700", "意責任");
+        map.put("1900", "意工");
+        map.put("2100", "意信保");
+        map.put("2000", "意其他");
+        CODE_TO_SUB_GROUP = Collections.unmodifiableMap(map);
+    }
+
+    /**
+     * 取得全部 16 子分類 (含國外分進)
+     */
+    public static List<SubCategory> getAllSubCategoriesWithOverseas() {
+        List<SubCategory> list = new ArrayList<>(SUB_CATEGORIES);
+        list.add(OVERSEAS_REINSURANCE);
+        return list;
     }
 
     /**
