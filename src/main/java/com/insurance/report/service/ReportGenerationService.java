@@ -30,7 +30,6 @@ public class ReportGenerationService {
     private final CumulativeCalculator cumulativeCalculator;
     private final CategoryCalculator categoryCalculator;
     private final ComparisonCalculator comparisonCalculator;
-    private final RankingCalculator rankingCalculator;
     private final PremiumReportWriter premiumWriter;
     private final ComparisonReportWriter comparisonWriter;
 
@@ -43,7 +42,6 @@ public class ReportGenerationService {
             CumulativeCalculator cumulativeCalculator,
             CategoryCalculator categoryCalculator,
             ComparisonCalculator comparisonCalculator,
-            RankingCalculator rankingCalculator,
             PremiumReportWriter premiumWriter,
             ComparisonReportWriter comparisonWriter) {
         this.config = config;
@@ -54,7 +52,6 @@ public class ReportGenerationService {
         this.cumulativeCalculator = cumulativeCalculator;
         this.categoryCalculator = categoryCalculator;
         this.comparisonCalculator = comparisonCalculator;
-        this.rankingCalculator = rankingCalculator;
         this.premiumWriter = premiumWriter;
         this.comparisonWriter = comparisonWriter;
     }
@@ -147,16 +144,6 @@ public class ReportGenerationService {
                 currentCumCatTotals, priorCumCatTotals, comparisonCategoryNames,
                 "1-" + latestMonth + "月累計");
 
-        // 3e: 排名 (年度累計至最新月份)
-        Map<CompanyInfo, Long> rankingData = new LinkedHashMap<>();
-        List<CompanyMonthData> latestCumulative = cumulativeData.get(latestMonth);
-        if (latestCumulative != null) {
-            for (CompanyMonthData d : latestCumulative) {
-                rankingData.put(new CompanyInfo(d.getCompanyCode(), d.getCompanyName()), d.getTotal());
-            }
-        }
-        List<RankingCalculator.RankEntry> ranking = rankingCalculator.calculate(rankingData);
-
         // Step 4: 輸出 Excel
         log.info("Step 4: 輸出 Excel");
         Path outputDir = Paths.get(config.getOutputDir());
@@ -167,7 +154,7 @@ public class ReportGenerationService {
                 monthlyData, cumulativeData,
                 monthlySubtotals, cumulativeSubtotals,
                 priorMonthlySubtotals, priorCumulativeSubtotals,
-                ranking, outputDir.resolve(report1Name));
+                outputDir.resolve(report1Name));
 
         // 報表二：同期比較分析表
         int yearMonth = year * 100 + latestMonth;

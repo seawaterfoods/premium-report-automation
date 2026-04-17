@@ -45,7 +45,6 @@ public class PremiumReportWriter {
             Map<Integer, CompanyMonthData> cumulativeSubtotals,
             Map<Integer, CompanyMonthData> priorMonthlySubtotals,
             Map<Integer, CompanyMonthData> priorCumulativeSubtotals,
-            List<RankingCalculator.RankEntry> ranking,
             Path outputPath) throws IOException {
 
         log.info("產生保費統計表: {}", outputPath.getFileName());
@@ -77,9 +76,6 @@ public class PremiumReportWriter {
             // Sheet 5: 歸屬
             writeGuishuSheet(wb, styles);
 
-            // Sheet 6: 排名
-            writeRankingSheet(wb, styles, year, latestMonth, ranking);
-
             // 儲存
             Files.createDirectories(outputPath.getParent());
             try (OutputStream os = Files.newOutputStream(outputPath)) {
@@ -101,10 +97,17 @@ public class PremiumReportWriter {
         Sheet sheet = wb.createSheet(sheetName);
         int rowIdx = 0;
 
-        // Row 0: 險種代號
+        // Row 0: 險種代號 (排除 hidden-codes)
         Row row0 = sheet.createRow(rowIdx++);
         createCell(row0, 2, "險種代號", styles.getHeaderStyle());
-        List<String> codes = CategoryMapping.ALL_INSURANCE_CODES;
+        List<String> allCodes = CategoryMapping.ALL_INSURANCE_CODES;
+        List<String> hiddenCodes = config.getColumns().getHiddenCodes();
+        List<String> codes = new ArrayList<>();
+        for (String code : allCodes) {
+            if (!hiddenCodes.contains(code)) {
+                codes.add(code);
+            }
+        }
         for (int i = 0; i < codes.size(); i++) {
             createCell(row0, 3 + i, codes.get(i), styles.getHeaderStyle());
         }
@@ -138,7 +141,7 @@ public class PremiumReportWriter {
             for (CompanyMonthData cd : periodData) {
                 Row row = sheet.createRow(rowIdx);
                 createCell(row, 0, cd.getCompanyCode(), styles.getCompanyStyle());
-                createCell(row, 1, periodLabel, styles.getCompanyStyle());
+                createCell(row, 1, periodLabel, styles.getMonthStyle());
                 createCell(row, 2, cd.getCompanyName(), styles.getCompanyStyle());
                 for (int i = 0; i < codes.size(); i++) {
                     createCell(row, 3 + i, cd.getPremium(codes.get(i)), styles.getNumberStyle());
@@ -320,7 +323,7 @@ public class PremiumReportWriter {
             for (CompanyMonthData cd : periodData) {
                 Row row = sheet.createRow(rowIdx);
                 createCell(row, 0, cd.getCompanyCode(), styles.getCompanyStyle());
-                createCell(row, 1, periodLabel, styles.getCompanyStyle());
+                createCell(row, 1, periodLabel, styles.getMonthStyle());
                 createCell(row, 2, cd.getCompanyName(), styles.getCompanyStyle());
 
                 Map<String, Long> catAmounts = categoryCalculator.calculateAllSubCategories(cd);
@@ -469,35 +472,6 @@ public class PremiumReportWriter {
         sheet.setColumnWidth(2, 2500);
         sheet.setColumnWidth(3, 3000);
         sheet.setColumnWidth(4, 8000);
-    }
-
-    // ==================== Sheet 6: 排名 ====================
-
-    private void writeRankingSheet(Workbook wb, ExcelStyleHelper styles,
-                                   int year, int latestMonth,
-                                   List<RankingCalculator.RankEntry> ranking) {
-        Sheet sheet = wb.createSheet("排名");
-        int rowIdx = 0;
-
-        // 表頭 (對齊範例: 無標題行, 僅 公司 / 月份 兩欄)
-        Row header = sheet.createRow(rowIdx++);
-        // A 欄留空
-        createCell(header, 1, "公司", styles.getHeaderStyle());
-        String colHeader = latestMonth == 1
-                ? "1月"
-                : String.format("1-%d月", latestMonth);
-        createCell(header, 2, colHeader, styles.getHeaderStyle());
-
-        // 資料列
-        for (RankingCalculator.RankEntry entry : ranking) {
-            Row row = sheet.createRow(rowIdx++);
-            createCell(row, 1, entry.getCompany().getName(), styles.getCompanyStyle());
-            createCell(row, 2, entry.getTotalPremium(), styles.getNumberStyle());
-        }
-
-        sheet.setColumnWidth(0, 1500);
-        sheet.setColumnWidth(1, 5000);
-        sheet.setColumnWidth(2, 5000);
     }
 
     // --- 工具方法 ---

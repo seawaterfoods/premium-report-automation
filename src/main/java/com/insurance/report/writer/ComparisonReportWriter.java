@@ -83,7 +83,7 @@ public class ComparisonReportWriter {
         // Row 0: 標題
         Row titleRow = sheet.createRow(rowIdx++);
         String title = String.format("中華民國%d年與%d年產物保險業保費同期比較統計表", year, priorYear);
-        createCell(titleRow, 0, title, styles.getTitleStyle());
+        createCell(titleRow, 0, title, styles.getCmpTitleStyle());
         mergeRegion(sheet, 0, 0, 0, 15);
 
         // Row 1: 空白
@@ -91,8 +91,8 @@ public class ComparisonReportWriter {
 
         // Row 2: 月份 & 單位
         Row periodRow = sheet.createRow(rowIdx++);
-        createCell(periodRow, 0, month + "月份", styles.getHeaderStyle());
-        createCell(periodRow, 16, "      單位:元", styles.getSubHeaderStyle());
+        createCell(periodRow, 0, month + "月份", styles.getCmpPeriodStyle());
+        createCell(periodRow, 16, "      單位:元", styles.getCmpSubHeaderStyle());
 
         // Row 3-5: 表頭 (3 層)
         rowIdx = writeComparisonHeaders(sheet, styles, rowIdx);
@@ -103,11 +103,11 @@ public class ComparisonReportWriter {
         // === 區段一：單月比較 (Row 7-11) ===
         int priorRow = rowIdx;    // row 7 (0-based 6)
         rowIdx = writeValueRow(sheet, styles, rowIdx,
-                String.format("%d/%d", priorYear, month), monthly.getPriorValues());
+                String.format("%d/%d", priorYear, month), monthly.getPriorValues(), true);
 
         int currentRow = rowIdx;  // row 8 (0-based 7)
         rowIdx = writeValueRow(sheet, styles, rowIdx,
-                String.format("%d/%d", year, month), monthly.getCurrentValues());
+                String.format("%d/%d", year, month), monthly.getCurrentValues(), false);
 
         // Row 9: 佔比 (引用今年列)
         rowIdx = writeProportionRow(sheet, styles, rowIdx,
@@ -128,7 +128,7 @@ public class ComparisonReportWriter {
 
         // Row 14: 累計標題
         Row cumTitleRow = sheet.createRow(rowIdx++);
-        createCell(cumTitleRow, 0, String.format("1-%d月累計數", month), styles.getHeaderStyle());
+        createCell(cumTitleRow, 0, String.format("1-%d月累計數", month), styles.getCmpPeriodStyle());
 
         // Row 15-17: 累計表頭
         rowIdx = writeComparisonHeaders(sheet, styles, rowIdx);
@@ -139,11 +139,11 @@ public class ComparisonReportWriter {
         // === 區段二：累計比較 (Row 18-22) ===
         int cumPriorRow = rowIdx;
         rowIdx = writeValueRow(sheet, styles, rowIdx,
-                String.format("%d/1-%d", priorYear, month), cumulative.getPriorValues());
+                String.format("%d/1-%d", priorYear, month), cumulative.getPriorValues(), true);
 
         int cumCurrentRow = rowIdx;
         rowIdx = writeValueRow(sheet, styles, rowIdx,
-                String.format("%d/1-%d", year, month), cumulative.getCurrentValues());
+                String.format("%d/1-%d", year, month), cumulative.getCurrentValues(), false);
 
         // 佔累計比重
         rowIdx = writeProportionRow(sheet, styles, rowIdx,
@@ -172,79 +172,81 @@ public class ComparisonReportWriter {
         Row h3 = sheet.createRow(startRow + 2);
 
         // A: 年/月 險種 (span 3 rows)
-        createCell(h1, 0, "年/月   險種", styles.getHeaderStyle());
+        createCell(h1, 0, "年/月   險種", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow, startRow + 2, 0, 0);
 
         // B=火險(1), C=水險(2), D=航空險(3): 獨立跨 3 行
-        createCell(h1, 1, "火險", styles.getHeaderStyle());
+        createCell(h1, 1, "火險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow, startRow + 2, 1, 1);
-        createCell(h1, 2, "水險", styles.getHeaderStyle());
+        createCell(h1, 2, "水險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow, startRow + 2, 2, 2);
-        createCell(h1, 3, "航空險", styles.getHeaderStyle());
+        createCell(h1, 3, "航空險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow, startRow + 2, 3, 3);
 
         // E-I=汽車險 (cols 4-8): 合併 row h1
-        createCell(h1, 4, "汽車險", styles.getHeaderStyle());
+        createCell(h1, 4, "汽車險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow, startRow, 4, 8);
         // E=車體損失保險(4), F=任意責任險(5): 跨 h2-h3
-        createCell(h2, 4, "車體損失保險", styles.getHeaderStyle());
+        createCell(h2, 4, "車體損失保險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow + 1, startRow + 2, 4, 4);
-        createCell(h2, 5, "任意責任險", styles.getHeaderStyle());
+        createCell(h2, 5, "任意責任險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow + 1, startRow + 2, 5, 5);
         // G-I=強制責任險 (cols 6-8): 合併 row h2
-        createCell(h2, 6, "強制責任險", styles.getHeaderStyle());
+        createCell(h2, 6, "強制責任險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow + 1, startRow + 1, 6, 8);
         // G=汽車, H=機車, I=電動二輪車: row h3
-        createCell(h3, 6, "汽車", styles.getSubHeaderStyle());
-        createCell(h3, 7, "機車", styles.getSubHeaderStyle());
-        createCell(h3, 8, "電動二輪車", styles.getSubHeaderStyle());
+        createCell(h3, 6, "汽車", styles.getCmpSubHeaderStyle());
+        createCell(h3, 7, "機車", styles.getCmpSubHeaderStyle());
+        createCell(h3, 8, "電動二輪車", styles.getCmpSubHeaderStyle());
 
         // J-M=意外險 (cols 9-12): 合併 row h1
-        createCell(h1, 9, "意外險", styles.getHeaderStyle());
+        createCell(h1, 9, "意外險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow, startRow, 9, 12);
         // J=責任險(9), K=工程險(10), L=信用保證(11): 跨 h2-h3
-        createCell(h2, 9, "責任險", styles.getHeaderStyle());
+        createCell(h2, 9, "責任險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow + 1, startRow + 2, 9, 9);
-        createCell(h2, 10, "工程險", styles.getHeaderStyle());
+        createCell(h2, 10, "工程險", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow + 1, startRow + 2, 10, 10);
-        createCell(h2, 11, "信用保證", styles.getHeaderStyle());
+        createCell(h2, 11, "信用保證", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow + 1, startRow + 2, 11, 11);
         // M=其他財產(12) row h2 + 責任保險 row h3
-        createCell(h2, 12, "其他財產", styles.getHeaderStyle());
-        createCell(h3, 12, "責任保險", styles.getSubHeaderStyle());
+        createCell(h2, 12, "其他財產", styles.getCmpHeaderStyle());
+        createCell(h3, 12, "責任保險", styles.getCmpSubHeaderStyle());
 
         // N=傷害險(13), O=天災險(14), P=健康險(15): row h2 only
-        createCell(h2, 13, "傷害險", styles.getHeaderStyle());
-        createCell(h2, 14, "天災險", styles.getHeaderStyle());
-        createCell(h2, 15, "健康險", styles.getHeaderStyle());
+        createCell(h2, 13, "傷害險", styles.getCmpHeaderStyle());
+        createCell(h2, 14, "天災險", styles.getCmpHeaderStyle());
+        createCell(h2, 15, "健康險", styles.getCmpHeaderStyle());
 
         // Q=合計(16): 跨 h1-h2
-        createCell(h1, 16, "合計", styles.getHeaderStyle());
+        createCell(h1, 16, "合計", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow, startRow + 1, 16, 16);
 
         // 填充邊框
-        styles.fillBorders(sheet, startRow, startRow + 2, 0, 16);
+        styles.fillBorders(sheet, startRow, startRow + 2, 0, 16, styles.getCmpHeaderStyle());
 
         return startRow + 3;
     }
 
     /**
      * 寫入數值列 (去年/今年金額)：值直接寫入 B-P，合計 Q = SUM(B:P) 公式
+     * @param isPrior true=去年(藍字), false=今年(黑字)
      */
     private int writeValueRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
-                              String label, Map<String, Long> values) {
+                              String label, Map<String, Long> values, boolean isPrior) {
         Row row = sheet.createRow(rowIdx);
-        createCell(row, 0, label, styles.getCompanyStyle());
+        createCell(row, 0, label, styles.getCmpLabelStyle());
+        CellStyle numStyle = isPrior ? styles.getCmpBlueNumberStyle() : styles.getCmpNumberStyle();
 
         int col = 1;
         for (String catName : CATEGORY_NAMES) {
-            createCell(row, col, values.getOrDefault(catName, 0L), styles.getNumberStyle());
+            createCell(row, col, values.getOrDefault(catName, 0L), numStyle);
             col++;
         }
         // Q 合計 = SUM(B:P)
         String sumFormula = String.format("SUM(%s:%s)",
                 cellRef(1, rowIdx), cellRef(CATEGORY_NAMES.size(), rowIdx));
-        createFormulaCell(row, col, sumFormula, styles.getNumberStyle());
+        createFormulaCell(row, col, sumFormula, numStyle);
         return rowIdx + 1;
     }
 
@@ -254,16 +256,16 @@ public class ComparisonReportWriter {
     private int writeProportionRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
                                     String label, int currentValueRowIdx) {
         Row row = sheet.createRow(rowIdx);
-        createCell(row, 0, label, styles.getCompanyStyle());
+        createCell(row, 0, label, styles.getCmpRedLabelStyle());
         String totalRef = "$" + colLetter(CATEGORY_NAMES.size() + 1) + "$" + (currentValueRowIdx + 1);
         for (int col = 1; col <= CATEGORY_NAMES.size(); col++) {
             String formula = cellRef(col, currentValueRowIdx) + "/" + totalRef;
-            createFormulaCell(row, col, formula, styles.getPercentStyle());
+            createFormulaCell(row, col, formula, styles.getCmpPercentStyle());
         }
         // Q = SUM(B:P)
         String sumFormula = String.format("SUM(%s:%s)",
                 cellRef(1, rowIdx), cellRef(CATEGORY_NAMES.size(), rowIdx));
-        createFormulaCell(row, CATEGORY_NAMES.size() + 1, sumFormula, styles.getPercentStyle());
+        createFormulaCell(row, CATEGORY_NAMES.size() + 1, sumFormula, styles.getCmpPercentStyle());
         return rowIdx + 1;
     }
 
@@ -273,10 +275,10 @@ public class ComparisonReportWriter {
     private int writeDifferenceRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
                                     String label, int currentRowIdx, int priorRowIdx) {
         Row row = sheet.createRow(rowIdx);
-        createCell(row, 0, label, styles.getCompanyStyle());
+        createCell(row, 0, label, styles.getCmpLabelStyle());
         for (int col = 1; col <= CATEGORY_NAMES.size() + 1; col++) {
             String formula = cellRef(col, currentRowIdx) + "-" + cellRef(col, priorRowIdx);
-            createFormulaCell(row, col, formula, styles.getNumberStyle());
+            createFormulaCell(row, col, formula, styles.getCmpNumberStyle());
         }
         return rowIdx + 1;
     }
@@ -287,12 +289,12 @@ public class ComparisonReportWriter {
     private int writeGrowthRateRow(Sheet sheet, ExcelStyleHelper styles, int rowIdx,
                                     String label, int priorRowIdx, int diffRowIdx) {
         Row row = sheet.createRow(rowIdx);
-        createCell(row, 0, label, styles.getCompanyStyle());
+        createCell(row, 0, label, styles.getCmpLabelStyle());
         for (int col = 1; col <= CATEGORY_NAMES.size() + 1; col++) {
             String priorRef = cellRef(col, priorRowIdx);
             String diffRef = cellRef(col, diffRowIdx);
             String formula = String.format("IF(%s<0,NA(),%s/ABS(%s))", priorRef, diffRef, priorRef);
-            createFormulaCell(row, col, formula, styles.getPercentStyle());
+            createFormulaCell(row, col, formula, styles.getCmpBoldPercentStyle());
         }
         return rowIdx + 1;
     }
@@ -344,7 +346,7 @@ public class ComparisonReportWriter {
         Row titleRow = sheet.createRow(rowIdx++);
         String title = String.format("%d年與%d年產物保險業保費同期比較統計表\n保費收入、成長率及其增減原因分析如后：",
                 year, priorYear);
-        createCell(titleRow, 0, title, styles.getTitleStyle());
+        createCell(titleRow, 0, title, styles.getCmpTitleStyle());
         mergeRegion(sheet, 0, 0, 0, 4);
 
         // Row 1: 空白
@@ -352,11 +354,11 @@ public class ComparisonReportWriter {
 
         // Row 2: 表頭 (險種 A:B 合併 / 月份 C / 成長率 D / 增減原因 E)
         Row header = sheet.createRow(rowIdx++);
-        createCell(header, 0, "險種", styles.getHeaderStyle());
+        createCell(header, 0, "險種", styles.getCmpHeaderStyle());
         mergeRegion(sheet, rowIdx - 1, rowIdx - 1, 0, 1);
-        createCell(header, 2, "月份", styles.getHeaderStyle());
-        createCell(header, 3, "成長率", styles.getHeaderStyle());
-        createCell(header, 4, "增減原因", styles.getHeaderStyle());
+        createCell(header, 2, "月份", styles.getCmpHeaderStyle());
+        createCell(header, 3, "成長率", styles.getCmpHeaderStyle());
+        createCell(header, 4, "增減原因", styles.getCmpHeaderStyle());
 
         int dataStartRow = rowIdx; // row 3 (0-based)
 
@@ -379,31 +381,31 @@ public class ComparisonReportWriter {
 
             // 累計列
             Row cumRow = sheet.createRow(rowIdx++);
-            createCell(cumRow, 0, majorGroup, styles.getCompanyStyle());
-            createCell(cumRow, 1, subGroup, styles.getCompanyStyle());
+            createCell(cumRow, 0, majorGroup, styles.getCmpLabelStyle());
+            createCell(cumRow, 1, subGroup, styles.getCmpLabelStyle());
             if (isFirst) {
-                createCell(cumRow, 2, cumPeriod, styles.getCompanyStyle());
+                createCell(cumRow, 2, cumPeriod, styles.getCmpLabelStyle());
             } else {
-                createFormulaCell(cumRow, 2, cellRef(2, firstCumRow), styles.getCompanyStyle());
+                createFormulaCell(cumRow, 2, cellRef(2, firstCumRow), styles.getCmpLabelStyle());
             }
             // D: 成長率 = 比較增減率!{col}{cumGrowthRow}
             String cumFormula = String.format("比較增減率!%s%d", compColLetter, cumGrowthExcelRow);
-            createFormulaCell(cumRow, 3, cumFormula, styles.getPercentStyle());
-            createCell(cumRow, 4, "", styles.getCompanyStyle());
+            createFormulaCell(cumRow, 3, cumFormula, styles.getCmpPercentStyle());
+            createCell(cumRow, 4, "", styles.getCmpLabelStyle());
 
             // 單月列
             Row monRow = sheet.createRow(rowIdx++);
-            createCell(monRow, 0, "", styles.getCompanyStyle());
-            createCell(monRow, 1, "", styles.getCompanyStyle());
+            createCell(monRow, 0, "", styles.getCmpLabelStyle());
+            createCell(monRow, 1, "", styles.getCmpLabelStyle());
             if (isFirst) {
-                createCell(monRow, 2, monPeriod, styles.getCompanyStyle());
+                createCell(monRow, 2, monPeriod, styles.getCmpLabelStyle());
             } else {
-                createFormulaCell(monRow, 2, cellRef(2, firstMonRow), styles.getCompanyStyle());
+                createFormulaCell(monRow, 2, cellRef(2, firstMonRow), styles.getCmpLabelStyle());
             }
             // D: 成長率 = 比較增減率!{col}{monGrowthRow}
             String monFormula = String.format("比較增減率!%s%d", compColLetter, monGrowthExcelRow);
-            createFormulaCell(monRow, 3, monFormula, styles.getPercentStyle());
-            createCell(monRow, 4, "", styles.getCompanyStyle());
+            createFormulaCell(monRow, 3, monFormula, styles.getCmpPercentStyle());
+            createCell(monRow, 4, "", styles.getCmpLabelStyle());
 
             isFirst = false;
         }
