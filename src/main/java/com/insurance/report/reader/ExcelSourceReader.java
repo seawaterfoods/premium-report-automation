@@ -109,6 +109,26 @@ public class ExcelSourceReader {
         }
     }
 
+    /**
+     * 僅讀取檔案內的公司代號 (用於檔名比對檢核)
+     */
+    public String readCompanyCode(SourceFileInfo fileInfo) throws IOException {
+        try (InputStream is = Files.newInputStream(fileInfo.getFilePath());
+             Workbook workbook = new XSSFWorkbook(is)) {
+
+            Sheet sheet = workbook.getSheet("保險收入統計表");
+            if (sheet == null) {
+                sheet = workbook.getSheetAt(0);
+            }
+
+            String code = readCellAsString(sheet, COMPANY_CODE_ROW, COMPANY_CODE_COL);
+            if (code != null && code.length() == 1) {
+                code = "0" + code;
+            }
+            return code;
+        }
+    }
+
     private String readCellAsString(Sheet sheet, int row, int col) {
         Row r = sheet.getRow(row);
         if (r == null) return null;

@@ -72,8 +72,22 @@ public class ReportGenerationService {
         }
         int latestMonth = fileSet.getLatestMonth();
 
-        // Step 2: 驗證 & 讀取
-        log.info("Step 2: 驗證 & 讀取 (今年 {} 筆, 去年 {} 筆)",
+        // Step 2: 檔名公司代號檢核
+        log.info("Step 2: 檔名 vs 檔案內容公司代號檢核");
+        List<String> codeErrors = validateCompanyCodes(fileSet.getCurrentYearFiles());
+        codeErrors.addAll(validateCompanyCodes(fileSet.getPriorYearFiles()));
+        if (!codeErrors.isEmpty()) {
+            log.error("========== 公司代號檢核失敗 ==========");
+            for (String err : codeErrors) {
+                log.error("  {}", err);
+            }
+            log.error("共 {} 筆檔案公司代號不一致，不產生報表", codeErrors.size());
+            throw new IOException("公司代號檢核失敗，請修正後重新執行。詳情請查看 report.log");
+        }
+        log.info("公司代號檢核通過");
+
+        // Step 3: 驗證 & 讀取
+        log.info("Step 3: 驗證 & 讀取 (今年 {} 筆, 去年 {} 筆)",
                 countFiles(fileSet.getCurrentYearFiles()),
                 countFiles(fileSet.getPriorYearFiles()));
 
@@ -91,8 +105,8 @@ public class ReportGenerationService {
 
         log.info("公司清單 ({}家): {}", companyList.size(), companyList);
 
-        // Step 3: 計算
-        log.info("Step 3: 計算 (最新月份: {}月)", latestMonth);
+        // Step 4: 計算
+        log.info("Step 4: 計算 (最新月份: {}月)", latestMonth);
 
         // 3a: 單月彙整
         Map<Integer, List<CompanyMonthData>> monthlyData =
@@ -148,8 +162,8 @@ public class ReportGenerationService {
                 currentCumCatTotals, priorCumCatTotals, comparisonCategoryNames,
                 "1-" + latestMonth + "月累計");
 
-        // Step 4: 輸出 Excel
-        log.info("Step 4: 輸出 Excel");
+        // Step 5: 輸出 Excel
+        log.info("Step 5: 輸出 Excel");
         int yearMonth = year * 100 + latestMonth;
         Path outputDir = Paths.get(config.getOutputDir()).resolve(String.format("%05d", yearMonth));
         Files.createDirectories(outputDir);
@@ -170,7 +184,7 @@ public class ReportGenerationService {
                 monthlyComparison, cumulativeComparison,
                 outputDir.resolve(report2Name));
 
-        // Step 5: 執行摘要
+        // Step 6: 執行摘要
         log.info("========== 執行摘要 ==========");
         log.info("處理年度: {} (去年: {})", year, priorYear);
         log.info("公司數: {} 家", companyList.size());
@@ -182,6 +196,37 @@ public class ReportGenerationService {
     }
 
     // --- 內部方法 ---
+
+    /**
+     * 檢核所有檔案的檔名公司代號與檔案內容公司代號是否一致
+     */
+    private List<String> validateCompanyCodes(Map<Integer, List<SourceFileInfo>> filesByMonth) {
+        List<String> errors = new ArrayList<>();
+        for (var entry : filesByMonth.entrySet()) {
+            for (SourceFileInfo fileInfo : entry.getValue()) {
+                List<String> basicErrors = fileValidator.validate(fileInfo);
+                if (!basicErrors.isEmpty()) {
+                    continue; // 基本驗證不過的跳過，後面 readAllFiles 會再報錯
+                }
+                try {
+                    String internalCode = excelReader.readCompanyCode(fileInfo);
+                    String fileNameCode = fileInfo.getCompanyCode();
+
+                    if (internalCode == null || internalCode.isEmpty()) {
+                        errors.add(String.format("檔案 %s: 內容無公司代號 (B4 為空)",
+                                fileInfo.getFilePath().getFileName()));
+                    } else if (!fileNameCode.equals(internalCode)) {
+                        errors.add(String.format("檔案 %s: 檔名公司代號 [%s] ≠ 內容公司代號 [%s]",
+                                fileInfo.getFilePath().getFileName(), fileNameCode, internalCode));
+                    }
+                } catch (Exception e) {
+                    errors.add(String.format("檔案 %s: 無法讀取公司代號 — %s",
+                            fileInfo.getFilePath().getFileName(), e.getMessage()));
+                }
+            }
+        }
+        return errors;
+    }
 
     private List<CompanyMonthData> readAllFiles(Map<Integer, List<SourceFileInfo>> filesByMonth) {
         List<CompanyMonthData> result = new ArrayList<>();

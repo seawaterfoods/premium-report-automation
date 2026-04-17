@@ -105,7 +105,7 @@ sequenceDiagram
     Note over SVC: Step 1: 讀取設定
     SVC->>SVC: 讀取 application.yml
     
-    Note over SVC,FS: Step 2: 掃描來源資料夾
+    Note over SVC,FS: Step 1: 掃描來源資料夾
     SVC->>SCN: scan(importDir, processYear)
     SCN->>FS: 列舉 import/{年份}/{月份}/*.xlsx
     FS-->>SCN: 檔案清單
@@ -113,7 +113,18 @@ sequenceDiagram
     SCN->>SCN: 偵測最新月份
     SCN-->>SVC: SourceFileSet (今年+去年)
     
-    Note over SVC,RDR: Step 3-4: 驗證 & 解析
+    Note over SVC,RDR: Step 2: 檔名公司代號檢核
+    loop 每份來源檔
+        SVC->>RDR: readCompanyCode(file)
+        RDR-->>SVC: 內容公司代號
+        SVC->>SVC: 比對檔名代號 vs 內容代號
+    end
+    alt 有不一致
+        SVC->>SVC: 全部列出至 report.log
+        SVC-->>APP: 中止 (不產生報表)
+    end
+
+    Note over SVC,RDR: Step 3: 驗證 & 解析
     loop 每份來源檔
         SVC->>VAL: validate(file)
         VAL->>VAL: 驗證檔名/結構/代號
@@ -125,7 +136,7 @@ sequenceDiagram
         RDR-->>SVC: CompanyData
     end
     
-    Note over SVC,CAL: Step 5: 計算
+    Note over SVC,CAL: Step 4: 計算
     SVC->>CAL: calculateMonthly(allData)
     CAL-->>SVC: 單月明細 (無資料補0)
     SVC->>CAL: calculateCumulative(allData)
@@ -136,7 +147,7 @@ sequenceDiagram
     Note right of CAL: 去年=0 或 <0 → 分母=1, 記錄警告
     CAL-->>SVC: 同期比較 + 成長率
     
-    Note over SVC,FS: Step 4: 輸出 Excel
+    Note over SVC,FS: Step 5: 輸出 Excel
     SVC->>WRT: writePremiumReport(data)
     WRT->>WRT: Sheet1: {YYY}單
     WRT->>WRT: Sheet2: {YYY}單累
@@ -151,7 +162,7 @@ sequenceDiagram
     WRT->>WRT: Sheet2: 增減原因 (E欄留空)
     WRT->>FS: 儲存至 output/{年月}/ .xlsx
     
-    Note over SVC: Step 7: 完成
+    Note over SVC: Step 6: 完成
     SVC->>SVC: 輸出執行摘要
     SVC-->>APP: done
     APP-->>BAT: exit 0
