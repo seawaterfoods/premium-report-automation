@@ -35,11 +35,10 @@ graph TB
             CUMULATIVE["CumulativeCalculator<br/>累計彙整"]
             CATCALC["CategoryCalculator<br/>九大類加總"]
             COMPARISON["ComparisonCalculator<br/>同期比較 & 成長率"]
-            RANKING["RankingCalculator<br/>公司排名"]
         end
         
         subgraph Writer["📝 Writer Layer"]
-            W1["PremiumReportWriter<br/>保費統計表 6 頁簽"]
+            W1["PremiumReportWriter<br/>保費統計表 5 頁簽"]
             W2["ComparisonReportWriter<br/>同期比較表 2 頁簽"]
             FORMATTER["ExcelStyleHelper<br/>格式復刻"]
         end
@@ -47,11 +46,12 @@ graph TB
         SERVICE["ReportGenerationService<br/>ETL 流程協調器"]
     end
 
-    subgraph Output["📂 輸出資料夾 (output/)"]
+    subgraph Output["📂 輸出資料夾 (output/{年月}/)"]
         OUT1["115年產險業務(簽單)<br/>保費統計表.xlsx"]
         OUT2["11503vs11403同期<br/>比較分析表.xlsx"]
-        LOG["report.log"]
     end
+
+    LOG["output/report.log<br/>(每次覆蓋)"]
 
     SRC1 --> SCANNER
     SRC2 --> SCANNER
@@ -69,13 +69,10 @@ graph TB
     SERVICE --> CUMULATIVE
     SERVICE --> CATCALC
     SERVICE --> COMPARISON
-    SERVICE --> RANKING
     
     MONTHLY --> W1
     CUMULATIVE --> W1
     CATCALC --> W1
-    COMPARISON --> W1
-    RANKING --> W1
     COMPARISON --> W2
     
     W1 --> FORMATTER
@@ -138,24 +135,21 @@ sequenceDiagram
     SVC->>CAL: calculateComparison(thisYear, lastYear)
     Note right of CAL: 去年=0 或 <0 → 分母=1, 記錄警告
     CAL-->>SVC: 同期比較 + 成長率
-    SVC->>CAL: calculateRanking(cumulative)
-    CAL-->>SVC: 排名 (累計, 降冪)
     
-    Note over SVC,FS: Step 6: 輸出 Excel
+    Note over SVC,FS: Step 4: 輸出 Excel
     SVC->>WRT: writePremiumReport(data)
     WRT->>WRT: Sheet1: {YYY}單
     WRT->>WRT: Sheet2: {YYY}單累
     WRT->>WRT: Sheet3: {YYY}總
     WRT->>WRT: Sheet4: {YYY}總累
     WRT->>WRT: Sheet5: 歸屬
-    WRT->>WRT: Sheet6: 排名
     WRT->>WRT: 套用格式 (合併儲存格/框線/粗體)
-    WRT->>FS: 儲存 .xlsx
+    WRT->>FS: 儲存至 output/{年月}/ .xlsx
     
     SVC->>WRT: writeComparisonReport(data)
     WRT->>WRT: Sheet1: 比較增減率
     WRT->>WRT: Sheet2: 增減原因 (E欄留空)
-    WRT->>FS: 儲存 .xlsx
+    WRT->>FS: 儲存至 output/{年月}/ .xlsx
     
     Note over SVC: Step 7: 完成
     SVC->>SVC: 輸出執行摘要
@@ -200,33 +194,30 @@ flowchart LR
         T3["歸屬分類 → 九大類"]
         T4["單月/累計計算"]
         T5["同期比較"]
-        T6["排名計算"]
-        T1 --> T2 --> T3 --> T4 --> T5 --> T6
+        T1 --> T2 --> T3 --> T4 --> T5
     end
     
-    subgraph Output1["輸出1: 保費統計表"]
-        O1A["{YYY}單<br/>19公司×12月×33險種"]
-        O1B["{YYY}單累<br/>19公司×累計×33險種"]
-        O1C["{YYY}總<br/>19公司×12月×15類"]
-        O1D["{YYY}總累<br/>19公司×累計×15類"]
+    subgraph Output1["輸出1: 保費統計表 (output/{年月}/)"]
+        O1A["{YYY}單<br/>N公司×12月×33險種"]
+        O1B["{YYY}單累<br/>N公司×累計×33險種"]
+        O1C["{YYY}總<br/>N公司×12月×16類"]
+        O1D["{YYY}總累<br/>N公司×累計×16類"]
         O1E["歸屬<br/>分類對照表"]
-        O1F["排名<br/>公司排序"]
     end
     
-    subgraph Output2["輸出2: 同期比較"]
+    subgraph Output2["輸出2: 同期比較 (output/{年月}/)"]
         O2A["比較增減率<br/>15類×單月+累計"]
         O2B["增減原因<br/>15類×成長率+空白"]
     end
     
     S --> T1
-    T6 --> O1A
-    T6 --> O1B
-    T6 --> O1C
-    T6 --> O1D
-    T6 --> O1E
-    T6 --> O1F
-    T6 --> O2A
-    T6 --> O2B
+    T5 --> O1A
+    T5 --> O1B
+    T5 --> O1C
+    T5 --> O1D
+    T5 --> O1E
+    T5 --> O2A
+    T5 --> O2B
 ```
 
 ---
@@ -261,11 +252,10 @@ graph TB
             C2["CumulativeCalculator"]
             C3["CategoryCalculator"]
             C4["ComparisonCalculator"]
-            C5["RankingCalculator"]
         end
         
         subgraph writer
-            W1["PremiumReportWriter<br/>報表一 (6 sheets)"]
+            W1["PremiumReportWriter<br/>報表一 (5 sheets)"]
             W2["ComparisonReportWriter<br/>報表二 (2 sheets)"]
             W3["ExcelStyleHelper<br/>格式工具"]
         end
