@@ -1,0 +1,17 @@
+app:
+  # 路徑設定
+  import-dir: ./import
+  output-dir: ./output
+
+  # 年份設定（處理哪一年的資料，留空則自動偵測最新年份）
+  process-year: 115
+
+  # 險種欄位控制
+  columns:
+    # 是否在「總」表包含國外分進(9900)
+    include-overseas-reinsurance: false
+    # 隱藏的險種代號清單（不列入輸出）
+    hidden-codes: []
+
+  # 公司排序方式：BY_CODE_ASC | BY_CODE_DESC | BY_NAME
+  company-order: BY_CODE_ASC
