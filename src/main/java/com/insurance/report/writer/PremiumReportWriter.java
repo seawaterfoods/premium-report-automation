@@ -44,6 +44,8 @@ public class PremiumReportWriter {
             Map<Integer, List<CompanyMonthData>> cumulativeData,
             Map<Integer, CompanyMonthData> monthlySubtotals,
             Map<Integer, CompanyMonthData> cumulativeSubtotals,
+            Map<Integer, List<CompanyMonthData>> priorMonthlyData,
+            Map<Integer, List<CompanyMonthData>> priorCumulativeData,
             Map<Integer, CompanyMonthData> priorMonthlySubtotals,
             Map<Integer, CompanyMonthData> priorCumulativeSubtotals,
             Path outputPath) throws IOException {
@@ -65,13 +67,13 @@ public class PremiumReportWriter {
             // Sheet 3: {YYY}總
             writeSummarySheet(wb, styles, year + "總", year, latestMonth,
                     monthlyData, monthlySubtotals,
-                    priorMonthlySubtotals,
+                    priorMonthlyData, priorMonthlySubtotals,
                     companyList, false, 12);
 
             // Sheet 4: {YYY}總累
             writeSummarySheet(wb, styles, year + "總累", year, latestMonth,
                     cumulativeData, cumulativeSubtotals,
-                    priorCumulativeSubtotals,
+                    priorCumulativeData, priorCumulativeSubtotals,
                     companyList, true, latestMonth);
 
             // Sheet 5: 歸屬
@@ -216,6 +218,7 @@ public class PremiumReportWriter {
                                    int year, int latestMonth,
                                    Map<Integer, List<CompanyMonthData>> data,
                                    Map<Integer, CompanyMonthData> subtotals,
+                                   Map<Integer, List<CompanyMonthData>> priorData,
                                    Map<Integer, CompanyMonthData> priorSubtotals,
                                    List<String> companyList,
                                    boolean isCumulative, int maxPeriod) {
@@ -316,6 +319,18 @@ public class PremiumReportWriter {
                 ? FIRST_DATA_COL + TOTAL_CATS - 1   // S 欄
                 : FIRST_DATA_COL + TOTAL_CATS - 2;  // R 欄
 
+        // 建立去年各期的公司代號 → CompanyMonthData 快速查詢表
+        Map<Integer, Map<String, CompanyMonthData>> priorByPeriodAndCompany = new HashMap<>();
+        if (priorData != null) {
+            for (var entry : priorData.entrySet()) {
+                Map<String, CompanyMonthData> byCompany = new HashMap<>();
+                for (CompanyMonthData cd : entry.getValue()) {
+                    byCompany.put(cd.getCompanyCode(), cd);
+                }
+                priorByPeriodAndCompany.put(entry.getKey(), byCompany);
+            }
+        }
+
         // 追蹤小計列行號 (供總計公式用)
         List<Integer> subtotalRows = new ArrayList<>();
 
@@ -342,8 +357,23 @@ public class PremiumReportWriter {
                 String tFormula = String.format("SUM(%s:%s)",
                         cellRef(FIRST_DATA_COL, rowIdx), cellRef(totalSumEndCol, rowIdx));
                 createFormulaCell(row, tCol, tFormula, styles.getNumberStyle());
-                createCell(row, uCol, "", styles.getCompanyStyle());
-                createCell(row, vCol, "", styles.getCompanyStyle());
+
+                // U 去年合計 (從去年同期同公司資料計算)
+                Map<String, CompanyMonthData> priorPeriodMap = priorByPeriodAndCompany.get(period);
+                CompanyMonthData priorCd = priorPeriodMap != null ? priorPeriodMap.get(cd.getCompanyCode()) : null;
+                if (priorCd != null) {
+                    Map<String, Long> priorCatAmounts = categoryCalculator.calculateAllSubCategories(priorCd);
+                    long priorTotal = categoryCalculator.calculateOutputTotal(priorCatAmounts);
+                    createCell(row, uCol, priorTotal, styles.getNumberStyle());
+                    // V 成長率 = IF(U<=0, NA(), (T-U)/U)
+                    String tRef = cellRef(tCol, rowIdx);
+                    String uRef = cellRef(uCol, rowIdx);
+                    String grFormula = String.format("IF(%s<=0,NA(),(%s-%s)/%s)", uRef, tRef, uRef, uRef);
+                    createFormulaCell(row, vCol, grFormula, styles.getPercentStyle());
+                } else {
+                    createCell(row, uCol, "", styles.getCompanyStyle());
+                    createCell(row, vCol, "", styles.getCompanyStyle());
+                }
                 rowIdx++;
             }
 
@@ -367,12 +397,10 @@ public class PremiumReportWriter {
                         cellRef(FIRST_DATA_COL, rowIdx), cellRef(totalSumEndCol, rowIdx));
                 createFormulaCell(stRow, tCol, tFormula, styles.getSubtotalNumberStyle());
 
-                // U 去年合計
-                CompanyMonthData priorSub = priorSubtotals != null ? priorSubtotals.get(period) : null;
-                Map<String, Long> priorCatAmounts = priorSub != null
-                        ? categoryCalculator.calculateAllSubCategories(priorSub) : Collections.emptyMap();
-                long priorTotal = priorSub != null ? categoryCalculator.calculateOutputTotal(priorCatAmounts) : 0;
-                createCell(stRow, uCol, priorTotal, styles.getSubtotalNumberStyle());
+                // U 去年合計 = SUM(各公司 U 欄)
+                String uSumFormula = String.format("SUM(%s:%s)",
+                        cellRef(uCol, periodFirstRow), cellRef(uCol, rowIdx - 1));
+                createFormulaCell(stRow, uCol, uSumFormula, styles.getSubtotalNumberStyle());
 
                 // V 成長率 = IF(U<=0, NA(), (T-U)/U)
                 String tRef = cellRef(tCol, rowIdx);

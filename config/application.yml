@@ -10,7 +10,7 @@ app:
   columns:
     # 隱藏的險種代號清單（不列入輸出）
     # 若 9900 在此清單中，明細表不顯示該欄，總表合計也會排除國外分進
-    hidden-codes: []
+    hidden-codes: [9900]
 
   # 公司排序方式：BY_CODE_ASC | BY_CODE_DESC | BY_NAME
   company-order: BY_CODE_ASC

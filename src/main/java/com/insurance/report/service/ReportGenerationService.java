@@ -153,6 +153,7 @@ public class ReportGenerationService {
         premiumWriter.write(year, latestMonth,
                 monthlyData, cumulativeData,
                 monthlySubtotals, cumulativeSubtotals,
+                priorMonthlyData, priorCumulativeData,
                 priorMonthlySubtotals, priorCumulativeSubtotals,
                 outputDir.resolve(report1Name));
 
