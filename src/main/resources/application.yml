@@ -16,6 +16,8 @@ app:
   company-order: BY_CODE_ASC
 
 spring:
+  config:
+    import: optional:file:./config/insurance-mapping.yml
   main:
     banner-mode: off
     web-application-type: none

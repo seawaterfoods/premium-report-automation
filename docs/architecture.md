@@ -27,7 +27,7 @@ graph TB
         subgraph Model["📦 Domain Model"]
             COMPANY["CompanyData"]
             INSURANCE["InsuranceRecord"]
-            CATEGORY["CategoryMapping"]
+            CATEGORY["CategoryMapping<br/>歸屬對照 (從YAML載入)"]
         end
         
         subgraph Calculator["🧮 Calculator Layer"]
@@ -236,7 +236,7 @@ graph TB
         subgraph model
             M1["CompanyData<br/>公司 + 月份 + 金額"]
             M2["InsuranceCode<br/>險種代號枚舉"]
-            M3["CategoryMapping<br/>歸屬對照"]
+            M3["CategoryMapping<br/>歸屬對照 (從YAML載入)"]
             M4["MonthlyReport<br/>單月/累計資料"]
             M5["ComparisonResult<br/>同期比較結果"]
         end

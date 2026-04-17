@@ -15,6 +15,12 @@ import java.util.*;
 @Component
 public class CumulativeCalculator {
 
+    private final CategoryMapping categoryMapping;
+
+    public CumulativeCalculator(CategoryMapping categoryMapping) {
+        this.categoryMapping = categoryMapping;
+    }
+
     /**
      * 計算累計資料
      *
@@ -50,11 +56,11 @@ public class CumulativeCalculator {
                                 monthCompany.getCompanyName(),
                                 monthCompany.getYear(),
                                 endMonth);
-                        for (String code : CategoryMapping.ALL_INSURANCE_CODES) {
+                        for (String code : categoryMapping.getAllInsuranceCodes()) {
                             cumData.putPremium(code, monthCompany.getPremium(code));
                         }
                     } else {
-                        for (String code : CategoryMapping.ALL_INSURANCE_CODES) {
+                        for (String code : categoryMapping.getAllInsuranceCodes()) {
                             cumData.putPremium(code,
                                     cumData.getPremium(code) + monthCompany.getPremium(code));
                         }
@@ -78,7 +84,7 @@ public class CumulativeCalculator {
      */
     public CompanyMonthData calculateSubtotal(List<CompanyMonthData> periodData, int year, int endMonth) {
         CompanyMonthData subtotal = new CompanyMonthData("", "小計", year, endMonth);
-        for (String code : CategoryMapping.ALL_INSURANCE_CODES) {
+        for (String code : categoryMapping.getAllInsuranceCodes()) {
             long sum = periodData.stream().mapToLong(d -> d.getPremium(code)).sum();
             subtotal.putPremium(code, sum);
         }

@@ -29,10 +29,13 @@ public class PremiumReportWriter {
 
     private final AppConfig config;
     private final CategoryCalculator categoryCalculator;
+    private final CategoryMapping categoryMapping;
 
-    public PremiumReportWriter(AppConfig config, CategoryCalculator categoryCalculator) {
+    public PremiumReportWriter(AppConfig config, CategoryCalculator categoryCalculator,
+                               CategoryMapping categoryMapping) {
         this.config = config;
         this.categoryCalculator = categoryCalculator;
+        this.categoryMapping = categoryMapping;
     }
 
     /**
@@ -103,7 +106,7 @@ public class PremiumReportWriter {
         // Row 0: 險種代號 (排除 hidden-codes)
         Row row0 = sheet.createRow(rowIdx++);
         createCell(row0, 2, "險種代號", styles.getHeaderStyle());
-        List<String> allCodes = CategoryMapping.ALL_INSURANCE_CODES;
+        List<String> allCodes = categoryMapping.getAllInsuranceCodes();
         List<String> hiddenCodes = config.getColumns().getHiddenCodes();
         List<String> codes = new ArrayList<>();
         for (String code : allCodes) {
@@ -121,7 +124,7 @@ public class PremiumReportWriter {
         createCell(row1, 1, "月份", styles.getHeaderStyle());
         createCell(row1, 2, "公司別/險種", styles.getHeaderStyle());
         for (int i = 0; i < codes.size(); i++) {
-            String shortName = CategoryMapping.CODE_TO_SHORT_NAME.getOrDefault(codes.get(i), codes.get(i));
+            String shortName = categoryMapping.getCodeToShortName().getOrDefault(codes.get(i), codes.get(i));
             createCell(row1, 3 + i, shortName, styles.getSubHeaderStyle());
         }
         createCell(row1, 3 + codes.size(), "合計", styles.getHeaderStyle());
@@ -201,18 +204,7 @@ public class PremiumReportWriter {
         sheet.setAutoFilter(new CellRangeAddress(1, lastDataRow, 0, totalCol));
     }
 
-    /** 總表固定使用全部 16 子分類 (含國外分進) */
-    private static final List<SubCategory> ALL_SUMMARY_CATS = CategoryMapping.getAllSubCategoriesWithOverseas();
     private static final int FIRST_DATA_COL = 3;  // D 欄
-    private static final int TOTAL_CATS = 16;      // 16 子分類
-
-    // 子分類在 ALL_SUMMARY_CATS 中的索引範圍 (用於表頭分組)
-    private static final int AUTO_GROUP_START = 3;   // 車體損失險
-    private static final int AUTO_GROUP_END = 7;     // 電動二輪 (inclusive)
-    private static final int ACCIDENT_GROUP_START = 8;  // 責任險
-    private static final int ACCIDENT_GROUP_END = 11;   // 其他財產 (inclusive)
-    private static final int MANDATORY_START = 5;    // 強制汽車
-    private static final int MANDATORY_END = 7;      // 電動二輪 (inclusive)
 
     private void writeSummarySheet(Workbook wb, ExcelStyleHelper styles, String sheetName,
                                    int year, int latestMonth,
@@ -225,10 +217,14 @@ public class PremiumReportWriter {
         Sheet sheet = wb.createSheet(sheetName);
         int priorYear = year - 1;
 
+        // 從設定檔動態計算子分類清單及欄位數
+        List<SubCategory> allSummaryCats = categoryMapping.getAllSubCategoriesWithOverseas();
+        int totalCats = allSummaryCats.size();
+
         // 固定欄位位置
-        int tCol = FIRST_DATA_COL + TOTAL_CATS;     // T=19: 今年合計
-        int uCol = tCol + 1;                          // U=20: 去年合計
-        int vCol = tCol + 2;                          // V=21: 成長率
+        int tCol = FIRST_DATA_COL + totalCats;       // 今年合計
+        int uCol = tCol + 1;                          // 去年合計
+        int vCol = tCol + 2;                          // 成長率
         int lastCol = vCol;
 
         // === Row 0: 標題 ===
@@ -243,67 +239,98 @@ public class PremiumReportWriter {
         Row unitRow = sheet.createRow(1);
         createCell(unitRow, lastCol, "單位:新台幣元", styles.getSubHeaderStyle());
 
-        // === Row 2: 分組標題 ===
+        // === Row 2-4: 動態表頭 ===
         Row groupRow = sheet.createRow(2);
-        // 火險/水險/航空 獨立跨 3 行 (row 2-4)
-        createCell(groupRow, FIRST_DATA_COL + 0, "火險", styles.getHeaderStyle());
-        mergeRegion(sheet, 2, 4, FIRST_DATA_COL + 0, FIRST_DATA_COL + 0);
-        createCell(groupRow, FIRST_DATA_COL + 1, "水險", styles.getHeaderStyle());
-        mergeRegion(sheet, 2, 4, FIRST_DATA_COL + 1, FIRST_DATA_COL + 1);
-        createCell(groupRow, FIRST_DATA_COL + 2, "航空", styles.getHeaderStyle());
-        mergeRegion(sheet, 2, 4, FIRST_DATA_COL + 2, FIRST_DATA_COL + 2);
-        // 汽車險 合併 G:K (row 2)
-        int autoStart = FIRST_DATA_COL + AUTO_GROUP_START;
-        int autoEnd = FIRST_DATA_COL + AUTO_GROUP_END;
-        createCell(groupRow, autoStart, "汽車險", styles.getHeaderStyle());
-        mergeRegion(sheet, 2, 2, autoStart, autoEnd);
-        // 意外險 合併 L:O (row 2)
-        int accStart = FIRST_DATA_COL + ACCIDENT_GROUP_START;
-        int accEnd = FIRST_DATA_COL + ACCIDENT_GROUP_END;
-        createCell(groupRow, accStart, "意外險", styles.getHeaderStyle());
-        mergeRegion(sheet, 2, 2, accStart, accEnd);
-        // 比較 (row 2)
-        createCell(groupRow, lastCol, "比較", styles.getHeaderStyle());
-
-        // === Row 3: 子類標題 ===
         Row subRow = sheet.createRow(3);
+        Row sub2Row = sheet.createRow(4);
+
         createCell(subRow, 0, "代號", styles.getHeaderStyle());
         createCell(subRow, 1, "月份", styles.getHeaderStyle());
         createCell(subRow, 2, "公司別/險種", styles.getHeaderStyle());
-        // 汽車險子類
-        createCell(subRow, FIRST_DATA_COL + 3, "車體損失險", styles.getHeaderStyle());
-        mergeRegion(sheet, 3, 4, FIRST_DATA_COL + 3, FIRST_DATA_COL + 3);
-        createCell(subRow, FIRST_DATA_COL + 4, "任意責任險", styles.getHeaderStyle());
-        mergeRegion(sheet, 3, 4, FIRST_DATA_COL + 4, FIRST_DATA_COL + 4);
-        int manStart = FIRST_DATA_COL + MANDATORY_START;
-        int manEnd = FIRST_DATA_COL + MANDATORY_END;
-        createCell(subRow, manStart, "強制責任險", styles.getHeaderStyle());
-        mergeRegion(sheet, 3, 3, manStart, manEnd);
-        // 意外險子類
-        createCell(subRow, FIRST_DATA_COL + 8, "責任險", styles.getHeaderStyle());
-        mergeRegion(sheet, 3, 4, FIRST_DATA_COL + 8, FIRST_DATA_COL + 8);
-        createCell(subRow, FIRST_DATA_COL + 9, "工程險", styles.getHeaderStyle());
-        mergeRegion(sheet, 3, 4, FIRST_DATA_COL + 9, FIRST_DATA_COL + 9);
-        createCell(subRow, FIRST_DATA_COL + 10, "信用保證", styles.getHeaderStyle());
-        mergeRegion(sheet, 3, 4, FIRST_DATA_COL + 10, FIRST_DATA_COL + 10);
-        createCell(subRow, FIRST_DATA_COL + 11, "其他財產", styles.getHeaderStyle());
-        // 獨立子類 (row 3 only, no vertical merge)
-        createCell(subRow, FIRST_DATA_COL + 12, "傷害險", styles.getHeaderStyle());
-        createCell(subRow, FIRST_DATA_COL + 13, "天災險", styles.getHeaderStyle());
-        createCell(subRow, FIRST_DATA_COL + 14, "健康險", styles.getHeaderStyle());
-        createCell(subRow, FIRST_DATA_COL + 15, "國外\n分進", styles.getHeaderStyle());
-        mergeRegion(sheet, 3, 4, FIRST_DATA_COL + 15, FIRST_DATA_COL + 15);
-        // 比較子類
+
+        // 計算各大類在子分類清單中的起止位置
+        String currentMajor = null;
+        int groupStartIdx = 0;
+        List<int[]> majorRanges = new ArrayList<>();
+        List<String> majorNames = new ArrayList<>();
+        for (int i = 0; i < totalCats; i++) {
+            String major = allSummaryCats.get(i).getMajorCategory();
+            if (!major.equals(currentMajor)) {
+                if (currentMajor != null) {
+                    majorRanges.add(new int[]{groupStartIdx, i - 1});
+                    majorNames.add(currentMajor);
+                }
+                currentMajor = major;
+                groupStartIdx = i;
+            }
+        }
+        if (currentMajor != null) {
+            majorRanges.add(new int[]{groupStartIdx, totalCats - 1});
+            majorNames.add(currentMajor);
+        }
+
+        for (int g = 0; g < majorRanges.size(); g++) {
+            int[] range = majorRanges.get(g);
+            String majorName = majorNames.get(g);
+            int startCol = FIRST_DATA_COL + range[0];
+            int endCol = FIRST_DATA_COL + range[1];
+            int subCount = range[1] - range[0] + 1;
+
+            if (subCount == 1) {
+                // 單一子分類：合併 row 2-4
+                createCell(groupRow, startCol, majorName, styles.getHeaderStyle());
+                mergeRegion(sheet, 2, 4, startCol, startCol);
+            } else {
+                // 多子分類：row 2 水平合併
+                createCell(groupRow, startCol, majorName, styles.getHeaderStyle());
+                mergeRegion(sheet, 2, 2, startCol, endCol);
+
+                // Row 3-4: 子分類標題
+                int i = range[0];
+                while (i <= range[1]) {
+                    SubCategory sub = allSummaryCats.get(i);
+                    int col = FIRST_DATA_COL + i;
+
+                    if (sub.getHeaderGroup() != null) {
+                        // 找出同 headerGroup 的連續子分類
+                        int hgStart = i;
+                        String hg = sub.getHeaderGroup();
+                        while (i <= range[1] && hg.equals(allSummaryCats.get(i).getHeaderGroup())) {
+                            i++;
+                        }
+                        int hgEnd = i - 1;
+                        int hgStartCol = FIRST_DATA_COL + hgStart;
+                        int hgEndCol = FIRST_DATA_COL + hgEnd;
+
+                        createCell(subRow, hgStartCol, hg, styles.getHeaderStyle());
+                        if (hgEnd > hgStart) {
+                            mergeRegion(sheet, 3, 3, hgStartCol, hgEndCol);
+                        }
+                        for (int j = hgStart; j <= hgEnd; j++) {
+                            String label = allSummaryCats.get(j).getHeaderLabel();
+                            if (label == null) label = allSummaryCats.get(j).getName();
+                            createCell(sub2Row, FIRST_DATA_COL + j, label, styles.getSubHeaderStyle());
+                        }
+                    } else if (sub.getShortHeader() != null && sub.getSubHeader() != null) {
+                        // 兩行顯示
+                        createCell(subRow, col, sub.getShortHeader(), styles.getHeaderStyle());
+                        createCell(sub2Row, col, sub.getSubHeader(), styles.getSubHeaderStyle());
+                        i++;
+                    } else {
+                        // 一般：合併 row 3-4
+                        createCell(subRow, col, sub.getName(), styles.getHeaderStyle());
+                        mergeRegion(sheet, 3, 4, col, col);
+                        i++;
+                    }
+                }
+            }
+        }
+
+        // 比較欄
+        createCell(groupRow, lastCol, "比較", styles.getHeaderStyle());
         createCell(subRow, tCol, year + "年度", styles.getHeaderStyle());
         createCell(subRow, uCol, priorYear + "年度", styles.getHeaderStyle());
         createCell(subRow, vCol, "成長率", styles.getHeaderStyle());
-
-        // === Row 4: 第三層標題 ===
-        Row sub2Row = sheet.createRow(4);
-        createCell(sub2Row, FIRST_DATA_COL + 5, "汽車", styles.getSubHeaderStyle());
-        createCell(sub2Row, FIRST_DATA_COL + 6, "機車", styles.getSubHeaderStyle());
-        createCell(sub2Row, FIRST_DATA_COL + 7, "電動二輪", styles.getSubHeaderStyle());
-        createCell(sub2Row, FIRST_DATA_COL + 11, "責任保險", styles.getSubHeaderStyle());
         createCell(sub2Row, tCol, "合計", styles.getSubHeaderStyle());
         createCell(sub2Row, uCol, "合計", styles.getSubHeaderStyle());
         createCell(sub2Row, vCol, "%", styles.getSubHeaderStyle());
@@ -316,8 +343,8 @@ public class PremiumReportWriter {
 
         // T 欄 SUM 範圍取決於是否含國外分進
         int totalSumEndCol = config.getColumns().isIncludeOverseasReinsurance()
-                ? FIRST_DATA_COL + TOTAL_CATS - 1   // S 欄
-                : FIRST_DATA_COL + TOTAL_CATS - 2;  // R 欄
+                ? FIRST_DATA_COL + totalCats - 1   // 最後子分類欄
+                : FIRST_DATA_COL + totalCats - 2;  // 倒數第二欄
 
         // 建立去年各期的公司代號 → CompanyMonthData 快速查詢表
         Map<Integer, Map<String, CompanyMonthData>> priorByPeriodAndCompany = new HashMap<>();
@@ -350,7 +377,7 @@ public class PremiumReportWriter {
                 Map<String, Long> catAmounts = categoryCalculator.calculateAllSubCategories(cd);
 
                 int col = FIRST_DATA_COL;
-                for (SubCategory sub : ALL_SUMMARY_CATS) {
+                for (SubCategory sub : allSummaryCats) {
                     createCell(row, col++, catAmounts.getOrDefault(sub.getName(), 0L), styles.getNumberStyle());
                 }
                 // T 今年合計 = SUM(D:S 或 D:R)
@@ -386,7 +413,7 @@ public class PremiumReportWriter {
                 createCell(stRow, 2, "小計", styles.getSubtotalStyle());
 
                 // 各子分類 = SUM(該欄所有公司列)
-                for (int c = FIRST_DATA_COL; c < FIRST_DATA_COL + TOTAL_CATS; c++) {
+                for (int c = FIRST_DATA_COL; c < FIRST_DATA_COL + totalCats; c++) {
                     String formula = String.format("SUM(%s:%s)",
                             cellRef(c, periodFirstRow), cellRef(c, rowIdx - 1));
                     createFormulaCell(stRow, c, formula, styles.getSubtotalNumberStyle());
@@ -429,7 +456,7 @@ public class PremiumReportWriter {
                 }
                 createFormulaCell(totalRow, c,
                         formula.toString(),
-                        c <= FIRST_DATA_COL + TOTAL_CATS - 1
+                        c <= FIRST_DATA_COL + totalCats - 1
                                 ? styles.getSubtotalNumberStyle() : styles.getSubtotalNumberStyle());
             }
 
@@ -461,17 +488,17 @@ public class PremiumReportWriter {
         List<String[]> categoryBlocks = new ArrayList<>();  // [majorCat, categoryNumber]
         List<List<String>> categoryCodeLists = new ArrayList<>();
 
-        for (String majorCat : CategoryMapping.MAJOR_CATEGORIES) {
+        for (String majorCat : categoryMapping.getMajorCategories()) {
             List<String> codesInCategory = new ArrayList<>();
-            for (SubCategory sub : CategoryMapping.SUB_CATEGORIES) {
+            for (SubCategory sub : categoryMapping.getSubCategories()) {
                 if (sub.getMajorCategory().equals(majorCat)) {
                     codesInCategory.addAll(sub.getInsuranceCodes());
                 }
             }
-            if (majorCat.equals("國外分進")) {
-                codesInCategory.addAll(CategoryMapping.OVERSEAS_REINSURANCE.getInsuranceCodes());
+            if (majorCat.equals(categoryMapping.getOverseasReinsurance().getMajorCategory())) {
+                codesInCategory.addAll(categoryMapping.getOverseasReinsurance().getInsuranceCodes());
             }
-            String catNum = CategoryMapping.MAJOR_CATEGORY_NUMBER.getOrDefault(majorCat, "");
+            String catNum = categoryMapping.getMajorCategoryNumber().getOrDefault(majorCat, "");
             categoryBlocks.add(new String[]{majorCat, catNum});
             categoryCodeLists.add(codesInCategory);
         }
@@ -568,11 +595,11 @@ public class PremiumReportWriter {
                             break;
                         case 3: // 子分組
                             fontType = ExcelStyleHelper.GuishuFont.DATA;
-                            cellValue = CategoryMapping.CODE_TO_SUB_GROUP.getOrDefault(code, "");
+                            cellValue = categoryMapping.getCodeToSubGroup().getOrDefault(code, "");
                             break;
                         default: // 險種全名
                             fontType = ExcelStyleHelper.GuishuFont.DATA;
-                            cellValue = CategoryMapping.CODE_TO_FULL_NAME.getOrDefault(code, "");
+                            cellValue = categoryMapping.getCodeToFullName().getOrDefault(code, "");
                             break;
                     }
 

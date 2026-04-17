@@ -33,6 +33,7 @@ public class ReportGenerationService {
     private final ComparisonCalculator comparisonCalculator;
     private final PremiumReportWriter premiumWriter;
     private final ComparisonReportWriter comparisonWriter;
+    private final CategoryMapping categoryMapping;
 
     public ReportGenerationService(
             AppConfig config,
@@ -44,7 +45,8 @@ public class ReportGenerationService {
             CategoryCalculator categoryCalculator,
             ComparisonCalculator comparisonCalculator,
             PremiumReportWriter premiumWriter,
-            ComparisonReportWriter comparisonWriter) {
+            ComparisonReportWriter comparisonWriter,
+            CategoryMapping categoryMapping) {
         this.config = config;
         this.fileScanner = fileScanner;
         this.fileValidator = fileValidator;
@@ -55,6 +57,7 @@ public class ReportGenerationService {
         this.comparisonCalculator = comparisonCalculator;
         this.premiumWriter = premiumWriter;
         this.comparisonWriter = comparisonWriter;
+        this.categoryMapping = categoryMapping;
     }
 
     public void execute() throws IOException {
@@ -134,7 +137,7 @@ public class ReportGenerationService {
         Map<String, Long> priorCumCatTotals = calculateCategorySubtotals(priorCumulativeSubtotals.get(latestMonth));
 
         List<String> comparisonCategoryNames = new ArrayList<>();
-        for (CategoryMapping.SubCategory sub : CategoryMapping.SUB_CATEGORIES) {
+        for (CategoryMapping.SubCategory sub : categoryMapping.getSubCategories()) {
             comparisonCategoryNames.add(sub.getName());
         }
 

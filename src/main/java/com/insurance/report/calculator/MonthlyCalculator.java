@@ -14,6 +14,12 @@ import java.util.*;
 @Component
 public class MonthlyCalculator {
 
+    private final CategoryMapping categoryMapping;
+
+    public MonthlyCalculator(CategoryMapping categoryMapping) {
+        this.categoryMapping = categoryMapping;
+    }
+
     /**
      * 將原始資料整理為按「月份 → 公司」結構的單月資料
      * <p>
@@ -48,7 +54,7 @@ public class MonthlyCalculator {
                     CompanyMonthData empty = new CompanyMonthData(
                             code, codeToName.getOrDefault(code, code),
                             rawData.isEmpty() ? 0 : rawData.get(0).getYear(), month);
-                    for (String insuranceCode : CategoryMapping.ALL_INSURANCE_CODES) {
+                    for (String insuranceCode : categoryMapping.getAllInsuranceCodes()) {
                         empty.putPremium(insuranceCode, 0);
                     }
                     empty.setTotal(0);
@@ -66,7 +72,7 @@ public class MonthlyCalculator {
      */
     public CompanyMonthData calculateSubtotal(List<CompanyMonthData> monthData, int year, int month) {
         CompanyMonthData subtotal = new CompanyMonthData("", "小計", year, month);
-        for (String code : CategoryMapping.ALL_INSURANCE_CODES) {
+        for (String code : categoryMapping.getAllInsuranceCodes()) {
             long sum = monthData.stream().mapToLong(d -> d.getPremium(code)).sum();
             subtotal.putPremium(code, sum);
         }

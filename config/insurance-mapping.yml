@@ -1,0 +1,212 @@
+# ================================================================
+# 險種歸屬對照設定
+# ================================================================
+# 修改此檔案即可新增/移除/調整險種，不需要重新編譯程式。
+#
+# 新增險種步驟:
+#   1. 在 codes 區塊新增一筆 (注意順序 = 明細表欄位順序)
+#   2. 在 categories 中找到對應大類，將代號加入 sub-categories 的 codes
+#   3. 重新執行 run.bat 即可
+#
+# 範例 — 新增 3300 長照險 (歸屬到健康險):
+#   codes 區塊加:
+#     - code: "3300"
+#       short-name: "長照險"
+#       full-name: "長期照顧保險"
+#   categories 的 健康險 sub-categories 改為:
+#     - name: "健康險"
+#       codes: ["3000", "3100", "3300"]
+# ================================================================
+
+app:
+  insurance:
+    # ===== 險種代號定義 =====
+    # 順序 = 明細表 (115單/115單累) 的欄位順序
+    codes:
+      - code: "0100"
+        short-name: "一年期\n住宅火險"
+        full-name: "一年期住宅火災保險"
+      - code: "0200"
+        short-name: "長期\n住宅火險"
+        full-name: "長期住宅火災保險"
+      - code: "0300"
+        short-name: "一年期\n商業火險"
+        full-name: "一年期商業火災保險"
+      - code: "0400"
+        short-name: "長期\n商業火險"
+        full-name: "長期商業火災保險"
+      - code: "0500"
+        short-name: "內陸運輸險"
+        full-name: "內陸運輸保險"
+      - code: "0600"
+        short-name: "貨物運輸險"
+        full-name: "貨物運輸保險"
+      - code: "0700"
+        short-name: "船體險"
+        full-name: "船體保險"
+      - code: "0800"
+        short-name: "漁船險"
+        full-name: "漁船保險"
+      - code: "0900"
+        short-name: "航空險"
+        full-name: "航空保險"
+      - code: "1000"
+        short-name: "自用車損險"
+        full-name: "一般自用汽車財產損失險"
+      - code: "1100"
+        short-name: "商業車損險"
+        full-name: "一般商業汽車財產損失險"
+      - code: "1200"
+        short-name: "自用車責險"
+        full-name: "一般自用汽車責任險"
+      - code: "1300"
+        short-name: "商業車責險"
+        full-name: "一般商業汽車責任險"
+      - code: "1400"
+        short-name: "強制自用車責險"
+        full-name: "強制自用汽車責任險"
+      - code: "1500"
+        short-name: "強制商業車責險"
+        full-name: "強制商業汽車責任險"
+      - code: "1600"
+        short-name: "強制機車責險"
+        full-name: "強制機車責任險"
+      - code: "1700"
+        short-name: "一般責任險"
+        full-name: "一般責任保險"
+      - code: "1800"
+        short-name: "專業責任險"
+        full-name: "專業責任保險"
+      - code: "1900"
+        short-name: "工程險"
+        full-name: "工程保險"
+      - code: "2000"
+        short-name: "核能險"
+        full-name: "核能保險"
+      - code: "2100"
+        short-name: "保證險"
+        full-name: "保證保險"
+      - code: "2200"
+        short-name: "信用險"
+        full-name: "信用保險"
+      - code: "2300"
+        short-name: "其他財產保險"
+        full-name: "其他財產保險"
+      - code: "2400"
+        short-name: "傷害險"
+        full-name: "傷害險"
+      - code: "2500"
+        short-name: "商業地震險"
+        full-name: "商業性地震險"
+      - code: "2600"
+        short-name: "個人綜險"
+        full-name: "個人綜合保險"
+      - code: "2700"
+        short-name: "商業綜險"
+        full-name: "商業綜合保險"
+      - code: "2800"
+        short-name: "颱風洪水險"
+        full-name: "颱風、洪水保險"
+      - code: "2900"
+        short-name: "政策地震險"
+        full-name: "政策性地震險"
+      - code: "3000"
+        short-name: "一年期\n健康險"
+        full-name: "一年期健康險"
+      - code: "3100"
+        short-name: "長年期\n健康險"
+        full-name: "長年期健康險"
+      - code: "3200"
+        short-name: "強制微型電動\n二輪車責險"
+        full-name: "強制微型電動二輪車責任險"
+      - code: "9900"
+        short-name: "國外\n分進"
+        full-name: "國外分進業務"
+
+    # ===== 九大類及子分類歸屬 =====
+    # overseas: true 的大類會受 hidden-codes 中的 9900 控制
+    categories:
+      - name: "火險"
+        number: "一"
+        sub-categories:
+          - name: "火險"
+            codes: ["0100", "0200", "0300", "0400"]
+
+      - name: "水險"
+        number: "二"
+        sub-categories:
+          - name: "水險"
+            codes: ["0500", "0600", "0700", "0800"]
+
+      - name: "航空險"
+        number: "三"
+        sub-categories:
+          - name: "航空險"
+            codes: ["0900"]
+
+      - name: "汽車險"
+        number: "四"
+        sub-categories:
+          - name: "車體損失險"
+            sub-group: "車體損"
+            codes: ["1000", "1100"]
+          - name: "任意責任險"
+            sub-group: "任意車責"
+            codes: ["1200", "1300"]
+          - name: "強制責任-汽車"
+            sub-group: "強制車"
+            header-group: "強制責任險"
+            header-label: "汽車"
+            codes: ["1400", "1500"]
+          - name: "強制-機車"
+            sub-group: "強制機"
+            header-group: "強制責任險"
+            header-label: "機車"
+            codes: ["1600"]
+          - name: "強制-電動二輪"
+            header-group: "強制責任險"
+            header-label: "電動二輪"
+            codes: ["3200"]
+
+      - name: "意外險"
+        number: "五"
+        sub-categories:
+          - name: "責任險"
+            sub-group: "意責任"
+            codes: ["1700", "1800"]
+          - name: "工程險"
+            sub-group: "意工"
+            codes: ["1900"]
+          - name: "信用保證"
+            sub-group: "意信保"
+            codes: ["2100", "2200"]
+          - name: "其他財產責任保險"
+            sub-group: "意其他"
+            short-header: "其他財產"
+            sub-header: "責任保險"
+            codes: ["2000", "2300", "2600", "2700"]
+
+      - name: "傷害險"
+        number: "六"
+        sub-categories:
+          - name: "傷害險"
+            codes: ["2400"]
+
+      - name: "天災險"
+        number: "七"
+        sub-categories:
+          - name: "天災險"
+            codes: ["2500", "2800", "2900"]
+
+      - name: "健康險"
+        number: "八"
+        sub-categories:
+          - name: "健康險"
+            codes: ["3000", "3100"]
+
+      - name: "國外分進"
+        number: "九"
+        overseas: true
+        sub-categories:
+          - name: "國外分進"
+            codes: ["9900"]

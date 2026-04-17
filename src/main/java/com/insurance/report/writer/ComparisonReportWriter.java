@@ -25,15 +25,23 @@ public class ComparisonReportWriter {
 
     private static final Logger log = LoggerFactory.getLogger(ComparisonReportWriter.class);
 
-    /** 比較表使用的 15 類 (不含國外分進) */
-    private static final List<SubCategory> COMPARISON_CATEGORIES;
-    private static final List<String> CATEGORY_NAMES;
+    private final CategoryMapping categoryMapping;
 
-    static {
-        COMPARISON_CATEGORIES = CategoryMapping.SUB_CATEGORIES;
-        CATEGORY_NAMES = new ArrayList<>();
-        for (SubCategory sub : COMPARISON_CATEGORIES) {
-            CATEGORY_NAMES.add(sub.getName());
+    /** 比較表使用的子分類 (不含國外分進)，在首次 write 時初始化 */
+    private List<SubCategory> comparisonCategories;
+    private List<String> categoryNames;
+
+    public ComparisonReportWriter(CategoryMapping categoryMapping) {
+        this.categoryMapping = categoryMapping;
+    }
+
+    private void ensureInitialized() {
+        if (comparisonCategories == null) {
+            comparisonCategories = categoryMapping.getSubCategories();
+            categoryNames = new ArrayList<>();
+            for (SubCategory sub : comparisonCategories) {
+                categoryNames.add(sub.getName());
+            }
         }
     }
 
@@ -51,6 +59,7 @@ public class ComparisonReportWriter {
             Path outputPath) throws IOException {
 
         log.info("產生同期比較分析表: {}", outputPath.getFileName());
+        ensureInitialized();
         int priorYear = year - 1;
 
         try (Workbook wb = new XSSFWorkbook()) {
@@ -161,7 +170,7 @@ public class ComparisonReportWriter {
 
         // 欄寬
         sheet.setColumnWidth(0, 5000);
-        for (int c = 1; c <= 16; c++) {
+        for (int c = 1; c <= categoryNames.size() + 1; c++) {
             sheet.setColumnWidth(c, 4000);
         }
     }
@@ -175,55 +184,91 @@ public class ComparisonReportWriter {
         createCell(h1, 0, "年/月   險種", styles.getCmpHeaderStyle());
         mergeRegion(sheet, startRow, startRow + 2, 0, 0);
 
-        // B=火險(1), C=水險(2), D=航空險(3): 獨立跨 3 行
-        createCell(h1, 1, "火險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow, startRow + 2, 1, 1);
-        createCell(h1, 2, "水險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow, startRow + 2, 2, 2);
-        createCell(h1, 3, "航空險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow, startRow + 2, 3, 3);
+        // 動態計算各大類在子分類清單中的起止位置
+        int totalSubCats = comparisonCategories.size();
+        String currentMajor = null;
+        int groupStartIdx = 0;
+        List<int[]> majorRanges = new ArrayList<>();
+        List<String> majorNames = new ArrayList<>();
+        for (int i = 0; i < totalSubCats; i++) {
+            String major = comparisonCategories.get(i).getMajorCategory();
+            if (!major.equals(currentMajor)) {
+                if (currentMajor != null) {
+                    majorRanges.add(new int[]{groupStartIdx, i - 1});
+                    majorNames.add(currentMajor);
+                }
+                currentMajor = major;
+                groupStartIdx = i;
+            }
+        }
+        if (currentMajor != null) {
+            majorRanges.add(new int[]{groupStartIdx, totalSubCats - 1});
+            majorNames.add(currentMajor);
+        }
 
-        // E-I=汽車險 (cols 4-8): 合併 row h1
-        createCell(h1, 4, "汽車險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow, startRow, 4, 8);
-        // E=車體損失保險(4), F=任意責任險(5): 跨 h2-h3
-        createCell(h2, 4, "車體損失保險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow + 1, startRow + 2, 4, 4);
-        createCell(h2, 5, "任意責任險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow + 1, startRow + 2, 5, 5);
-        // G-I=強制責任險 (cols 6-8): 合併 row h2
-        createCell(h2, 6, "強制責任險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow + 1, startRow + 1, 6, 8);
-        // G=汽車, H=機車, I=電動二輪車: row h3
-        createCell(h3, 6, "汽車", styles.getCmpSubHeaderStyle());
-        createCell(h3, 7, "機車", styles.getCmpSubHeaderStyle());
-        createCell(h3, 8, "電動二輪車", styles.getCmpSubHeaderStyle());
+        int firstDataCol = 1; // 比較表從 B 欄開始
 
-        // J-M=意外險 (cols 9-12): 合併 row h1
-        createCell(h1, 9, "意外險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow, startRow, 9, 12);
-        // J=責任險(9), K=工程險(10), L=信用保證(11): 跨 h2-h3
-        createCell(h2, 9, "責任險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow + 1, startRow + 2, 9, 9);
-        createCell(h2, 10, "工程險", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow + 1, startRow + 2, 10, 10);
-        createCell(h2, 11, "信用保證", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow + 1, startRow + 2, 11, 11);
-        // M=其他財產(12) row h2 + 責任保險 row h3
-        createCell(h2, 12, "其他財產", styles.getCmpHeaderStyle());
-        createCell(h3, 12, "責任保險", styles.getCmpSubHeaderStyle());
+        for (int g = 0; g < majorRanges.size(); g++) {
+            int[] range = majorRanges.get(g);
+            String majorName = majorNames.get(g);
+            int startCol = firstDataCol + range[0];
+            int endCol = firstDataCol + range[1];
+            int subCount = range[1] - range[0] + 1;
 
-        // N=傷害險(13), O=天災險(14), P=健康險(15): row h2 only
-        createCell(h2, 13, "傷害險", styles.getCmpHeaderStyle());
-        createCell(h2, 14, "天災險", styles.getCmpHeaderStyle());
-        createCell(h2, 15, "健康險", styles.getCmpHeaderStyle());
+            if (subCount == 1) {
+                // 單一子分類：合併 3 行
+                createCell(h1, startCol, majorName, styles.getCmpHeaderStyle());
+                mergeRegion(sheet, startRow, startRow + 2, startCol, startCol);
+            } else {
+                // 多子分類：h1 水平合併
+                createCell(h1, startCol, majorName, styles.getCmpHeaderStyle());
+                mergeRegion(sheet, startRow, startRow, startCol, endCol);
 
-        // Q=合計(16): 跨 h1-h2
-        createCell(h1, 16, "合計", styles.getCmpHeaderStyle());
-        mergeRegion(sheet, startRow, startRow + 1, 16, 16);
+                // h2-h3: 子分類標題
+                int i = range[0];
+                while (i <= range[1]) {
+                    SubCategory sub = comparisonCategories.get(i);
+                    int col = firstDataCol + i;
+
+                    if (sub.getHeaderGroup() != null) {
+                        int hgStart = i;
+                        String hg = sub.getHeaderGroup();
+                        while (i <= range[1] && hg.equals(comparisonCategories.get(i).getHeaderGroup())) {
+                            i++;
+                        }
+                        int hgEnd = i - 1;
+                        int hgStartCol = firstDataCol + hgStart;
+                        int hgEndCol = firstDataCol + hgEnd;
+
+                        createCell(h2, hgStartCol, hg, styles.getCmpHeaderStyle());
+                        if (hgEnd > hgStart) {
+                            mergeRegion(sheet, startRow + 1, startRow + 1, hgStartCol, hgEndCol);
+                        }
+                        for (int j = hgStart; j <= hgEnd; j++) {
+                            String label = comparisonCategories.get(j).getHeaderLabel();
+                            if (label == null) label = comparisonCategories.get(j).getName();
+                            createCell(h3, firstDataCol + j, label, styles.getCmpSubHeaderStyle());
+                        }
+                    } else if (sub.getShortHeader() != null && sub.getSubHeader() != null) {
+                        createCell(h2, col, sub.getShortHeader(), styles.getCmpHeaderStyle());
+                        createCell(h3, col, sub.getSubHeader(), styles.getCmpSubHeaderStyle());
+                        i++;
+                    } else {
+                        createCell(h2, col, sub.getName(), styles.getCmpHeaderStyle());
+                        mergeRegion(sheet, startRow + 1, startRow + 2, col, col);
+                        i++;
+                    }
+                }
+            }
+        }
+
+        // 合計欄
+        int totalCol = firstDataCol + totalSubCats;
+        createCell(h1, totalCol, "合計", styles.getCmpHeaderStyle());
+        mergeRegion(sheet, startRow, startRow + 1, totalCol, totalCol);
 
         // 填充邊框
-        styles.fillBorders(sheet, startRow, startRow + 2, 0, 16, styles.getCmpHeaderStyle());
+        styles.fillBorders(sheet, startRow, startRow + 2, 0, totalCol, styles.getCmpHeaderStyle());
 
         return startRow + 3;
     }
@@ -239,13 +284,13 @@ public class ComparisonReportWriter {
         CellStyle numStyle = isPrior ? styles.getCmpBlueNumberStyle() : styles.getCmpNumberStyle();
 
         int col = 1;
-        for (String catName : CATEGORY_NAMES) {
+        for (String catName : categoryNames) {
             createCell(row, col, values.getOrDefault(catName, 0L), numStyle);
             col++;
         }
         // Q 合計 = SUM(B:P)
         String sumFormula = String.format("SUM(%s:%s)",
-                cellRef(1, rowIdx), cellRef(CATEGORY_NAMES.size(), rowIdx));
+                cellRef(1, rowIdx), cellRef(categoryNames.size(), rowIdx));
         createFormulaCell(row, col, sumFormula, numStyle);
         return rowIdx + 1;
     }
@@ -257,15 +302,15 @@ public class ComparisonReportWriter {
                                     String label, int currentValueRowIdx) {
         Row row = sheet.createRow(rowIdx);
         createCell(row, 0, label, styles.getCmpRedLabelStyle());
-        String totalRef = "$" + colLetter(CATEGORY_NAMES.size() + 1) + "$" + (currentValueRowIdx + 1);
-        for (int col = 1; col <= CATEGORY_NAMES.size(); col++) {
+        String totalRef = "$" + colLetter(categoryNames.size() + 1) + "$" + (currentValueRowIdx + 1);
+        for (int col = 1; col <= categoryNames.size(); col++) {
             String formula = cellRef(col, currentValueRowIdx) + "/" + totalRef;
             createFormulaCell(row, col, formula, styles.getCmpPercentStyle());
         }
         // Q = SUM(B:P)
         String sumFormula = String.format("SUM(%s:%s)",
-                cellRef(1, rowIdx), cellRef(CATEGORY_NAMES.size(), rowIdx));
-        createFormulaCell(row, CATEGORY_NAMES.size() + 1, sumFormula, styles.getCmpPercentStyle());
+                cellRef(1, rowIdx), cellRef(categoryNames.size(), rowIdx));
+        createFormulaCell(row, categoryNames.size() + 1, sumFormula, styles.getCmpPercentStyle());
         return rowIdx + 1;
     }
 
@@ -276,7 +321,7 @@ public class ComparisonReportWriter {
                                     String label, int currentRowIdx, int priorRowIdx) {
         Row row = sheet.createRow(rowIdx);
         createCell(row, 0, label, styles.getCmpLabelStyle());
-        for (int col = 1; col <= CATEGORY_NAMES.size() + 1; col++) {
+        for (int col = 1; col <= categoryNames.size() + 1; col++) {
             String formula = cellRef(col, currentRowIdx) + "-" + cellRef(col, priorRowIdx);
             createFormulaCell(row, col, formula, styles.getCmpNumberStyle());
         }
@@ -290,7 +335,7 @@ public class ComparisonReportWriter {
                                     String label, int priorRowIdx, int diffRowIdx) {
         Row row = sheet.createRow(rowIdx);
         createCell(row, 0, label, styles.getCmpLabelStyle());
-        for (int col = 1; col <= CATEGORY_NAMES.size() + 1; col++) {
+        for (int col = 1; col <= categoryNames.size() + 1; col++) {
             String priorRef = cellRef(col, priorRowIdx);
             String diffRef = cellRef(col, diffRowIdx);
             String formula = String.format("IF(%s<0,NA(),%s/ABS(%s))", priorRef, diffRef, priorRef);
@@ -300,40 +345,6 @@ public class ComparisonReportWriter {
     }
 
     // ==================== Sheet 2: 增減原因 ====================
-
-    /**
-     * 增減原因結構定義
-     * [0]=大類名稱, [1]=子類顯示名, [2]=比較增減率欄位字母 (用於公式引用)
-     */
-    private static final String[][] REASON_CATEGORIES = {
-            {"火險", "", "B"},
-            {"水險", "", "C"},
-            {"航空", "", "D"},
-            {"汽車險", "車體損", "E"},
-            {"", "任意車責", "F"},
-            {"", "強制車", "G"},
-            {"", "強制機", "H"},
-            {"", "強制電動二輪", "I"},
-            {"意外險", "責任險", "J"},
-            {"", "工程險", "K"},
-            {"", "信用保險", "L"},
-            {"", "其他責任險", "M"},
-            {"傷害險", "", "N"},
-            {"天災險", "", "O"},
-            {"健康險", "", "P"},
-    };
-
-    /** 增減原因的大類 A 欄合併區域 (起始分類索引, 結束分類索引 exclusive) */
-    private static final int[][] REASON_MAJOR_GROUPS = {
-            {0, 1},    // 火險
-            {1, 2},    // 水險
-            {2, 3},    // 航空
-            {3, 8},    // 汽車險 (5 子類)
-            {8, 12},   // 意外險 (4 子類)
-            {12, 13},  // 傷害險
-            {13, 14},  // 天災險
-            {14, 15},  // 健康險
-    };
 
     private void writeReasonSheet(Workbook wb, ExcelStyleHelper styles,
                                    int year, int priorYear, int month,
@@ -362,6 +373,42 @@ public class ComparisonReportWriter {
 
         int dataStartRow = rowIdx; // row 3 (0-based)
 
+        // 動態建立增減原因分類結構
+        List<String[]> reasonCategories = new ArrayList<>(); // [majorLabel, subLabel, colLetter]
+        List<int[]> reasonMajorGroups = new ArrayList<>();   // [startIdx, endIdx exclusive]
+        String curMajor = null;
+        int majorStart = 0;
+
+        for (int i = 0; i < comparisonCategories.size(); i++) {
+            SubCategory sub = comparisonCategories.get(i);
+            String major = sub.getMajorCategory();
+
+            // 大類邊界
+            if (!major.equals(curMajor)) {
+                if (curMajor != null) {
+                    reasonMajorGroups.add(new int[]{majorStart, i});
+                }
+                curMajor = major;
+                majorStart = i;
+            }
+
+            // 標籤
+            String majorLabel = "";
+            if (i == majorStart || !major.equals(comparisonCategories.get(i - 1).getMajorCategory())) {
+                majorLabel = major;
+            }
+            // 多子分類大類才顯示子類名
+            long count = comparisonCategories.stream()
+                    .filter(s -> s.getMajorCategory().equals(major)).count();
+            String subLabel = count > 1 ? sub.getName() : "";
+            String compColLetter = colLetter(i + 1);
+
+            reasonCategories.add(new String[]{majorLabel, subLabel, compColLetter});
+        }
+        if (curMajor != null) {
+            reasonMajorGroups.add(new int[]{majorStart, comparisonCategories.size()});
+        }
+
         // 第一對使用文字值，後續用公式引用
         String cumPeriod = String.format("1-%d月", month);
         String monPeriod = String.format("%d月", month);
@@ -373,8 +420,8 @@ public class ComparisonReportWriter {
         int monGrowthExcelRow = monthlyGrowthRateRow + 1;
 
         boolean isFirst = true;
-        for (int catIdx = 0; catIdx < REASON_CATEGORIES.length; catIdx++) {
-            String[] cat = REASON_CATEGORIES[catIdx];
+        for (int catIdx = 0; catIdx < reasonCategories.size(); catIdx++) {
+            String[] cat = reasonCategories.get(catIdx);
             String majorGroup = cat[0];
             String subGroup = cat[1];
             String compColLetter = colLetter(catIdx + 1); // B, C, D, ..., P
@@ -411,7 +458,7 @@ public class ComparisonReportWriter {
         }
 
         // 合併大類儲存格
-        for (int[] group : REASON_MAJOR_GROUPS) {
+        for (int[] group : reasonMajorGroups) {
             int startIdx = group[0];
             int endIdx = group[1];
             int mergeStartRow = dataStartRow + startIdx * 2;

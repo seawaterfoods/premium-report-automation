@@ -18,9 +18,11 @@ import java.util.*;
 public class CategoryCalculator {
 
     private final AppConfig config;
+    private final CategoryMapping categoryMapping;
 
-    public CategoryCalculator(AppConfig config) {
+    public CategoryCalculator(AppConfig config, CategoryMapping categoryMapping) {
         this.config = config;
+        this.categoryMapping = categoryMapping;
     }
 
     /**
@@ -31,14 +33,14 @@ public class CategoryCalculator {
     public Map<String, Long> calculateSubCategories(CompanyMonthData data) {
         Map<String, Long> result = new LinkedHashMap<>();
 
-        for (SubCategory sub : CategoryMapping.SUB_CATEGORIES) {
+        for (SubCategory sub : categoryMapping.getSubCategories()) {
             result.put(sub.getName(), sub.sumFrom(data));
         }
 
         // 國外分進 (依設定決定是否包含)
         if (config.getColumns().isIncludeOverseasReinsurance()) {
-            result.put(CategoryMapping.OVERSEAS_REINSURANCE.getName(),
-                    CategoryMapping.OVERSEAS_REINSURANCE.sumFrom(data));
+            result.put(categoryMapping.getOverseasReinsurance().getName(),
+                    categoryMapping.getOverseasReinsurance().sumFrom(data));
         }
 
         return result;
@@ -49,11 +51,11 @@ public class CategoryCalculator {
      */
     public Map<String, Long> calculateAllSubCategories(CompanyMonthData data) {
         Map<String, Long> result = new LinkedHashMap<>();
-        for (SubCategory sub : CategoryMapping.SUB_CATEGORIES) {
+        for (SubCategory sub : categoryMapping.getSubCategories()) {
             result.put(sub.getName(), sub.sumFrom(data));
         }
-        result.put(CategoryMapping.OVERSEAS_REINSURANCE.getName(),
-                CategoryMapping.OVERSEAS_REINSURANCE.sumFrom(data));
+        result.put(categoryMapping.getOverseasReinsurance().getName(),
+                categoryMapping.getOverseasReinsurance().sumFrom(data));
         return result;
     }
 
@@ -79,9 +81,9 @@ public class CategoryCalculator {
      * 取得要輸出的子分類清單 (含/不含國外分進)
      */
     public List<SubCategory> getOutputSubCategories() {
-        List<SubCategory> list = new ArrayList<>(CategoryMapping.SUB_CATEGORIES);
+        List<SubCategory> list = new ArrayList<>(categoryMapping.getSubCategories());
         if (config.getColumns().isIncludeOverseasReinsurance()) {
-            list.add(CategoryMapping.OVERSEAS_REINSURANCE);
+            list.add(categoryMapping.getOverseasReinsurance());
         }
         return list;
     }

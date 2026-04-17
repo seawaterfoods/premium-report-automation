@@ -1,6 +1,6 @@
 # 操作手冊 — 產險業務保費統計自動化系統
 
-> 版本: 1.1 ｜ 最後更新: 2026-04-17
+> 版本: 1.2 ｜ 最後更新: 2026-04-17
 
 ---
 
@@ -47,6 +47,9 @@ java -version
 premium-report-automation/
 ├── config/
 │   └── application.yml          ← 主要設定檔 (修改這個)
+├── config/                      ← 設定檔
+│   ├── application.yml          ← 基本設定 (路徑、年份、隱藏代號)
+│   └── insurance-mapping.yml    ← 險種歸屬設定 (代號、名稱、分類)
 ├── import/                      ← 來源資料夾
 │   ├── 115/                     ← 今年 (民國年)
 │   │   ├── 01/                  ← 月份子資料夾
@@ -127,6 +130,36 @@ app:
 | `process-year` | 數字 | 民國年，如 `115`。系統自動掃描 `114` 作為去年 |
 | `hidden-codes` | 清單 | 要隱藏的險種代號，如 `["9900"]` 或 `["9900", "3300"]` |
 | `company-order` | 列舉 | 公司排序方式 |
+
+### 險種歸屬設定檔
+
+設定檔位於 `config/insurance-mapping.yml`，定義險種代號、名稱、歸屬分類。
+**修改此檔案不需要重新編譯程式。**
+
+結構概覽：
+```yaml
+app:
+  insurance:
+    codes:          # 險種代號清單 (順序=明細表欄位順序)
+      - code: "0100"
+        short-name: "一年期\n住宅火險"   # 表頭顯示名
+        full-name: "一年期住宅火災保險"  # 歸屬表顯示名
+    categories:     # 九大類歸屬
+      - name: "火險"
+        number: "一"
+        sub-categories:
+          - name: "火險"
+            codes: ["0100", "0200", "0300", "0400"]
+```
+
+子分類可選欄位：
+| 欄位 | 說明 |
+|------|------|
+| `sub-group` | 歸屬表 D 欄的子分組標籤 |
+| `header-group` | 總表/比較表中多個子分類共享的合併標題 |
+| `header-label` | 合併標題下個別欄位的名稱 |
+| `short-header` | 兩行顯示的第一行文字 |
+| `sub-header` | 兩行顯示的第二行文字 |
 
 ---
 
@@ -219,77 +252,83 @@ java -jar target/premium-report-automation-0.0.1-SNAPSHOT.jar
 
 ## 7. 新增險種教學
 
-當保險業新增一個險種（例如代號 `3300`），需要修改以下檔案：
+當保險業新增一個險種（例如代號 `3300` 長照險），**只需修改 YAML 設定檔，不需要改程式碼或重新編譯**。
 
-### 7.1 修改 `CategoryMapping.java`
+### 7.1 修改 `config/insurance-mapping.yml`
 
-路徑：`src/main/java/com/insurance/report/model/CategoryMapping.java`
+#### (a) 新增代號定義
 
-#### (a) 加入代號清單
+在 `codes` 區塊中，於適當位置新增一筆（順序 = 明細表欄位順序）：
 
-在 `ALL_INSURANCE_CODES` 清單中新增代號（依序插入適當位置）：
-
-```java
-public static final List<String> ALL_INSURANCE_CODES = List.of(
-        // ... 既有代號 ...
-        "3000", "3100", "3200",
-        "3300",    // ← 新增
-        "9900"
-);
+```yaml
+codes:
+  # ... 既有代號 ...
+  - code: "3100"
+    short-name: "長年期\n健康險"
+    full-name: "長年期健康險"
+  - code: "3300"           # ← 新增
+    short-name: "長照險"    # ← 明細表表頭顯示名 (可用 \n 換行)
+    full-name: "長期照顧保險" # ← 歸屬表顯示名
+  - code: "3200"
+    short-name: "強制微型電動\n二輪車責險"
+    full-name: "強制微型電動二輪車責任險"
 ```
 
-#### (b) 加入短名 (表頭用)
+#### (b) 歸屬到子分類
 
-在 `CODE_TO_SHORT_NAME` 中新增：
+在 `categories` 區塊中，找到對應的大類，將代號加入 `codes` 清單：
 
-```java
-map.put("3300", "新險種\n短名");   // ← 新增 (可用 \n 換行)
-```
-
-#### (c) 加入全名 (歸屬表用)
-
-在 `CODE_TO_FULL_NAME` 中新增：
-
-```java
-map.put("3300", "新險種全名");     // ← 新增
-```
-
-#### (d) 歸屬到子分類
-
-在 `SUB_CATEGORIES` 的 static block 中，將 3300 加入適當的子分類：
-
-**情況 A — 歸屬到既有子分類：**
-```java
-// 例如歸屬到健康險
-list.add(new SubCategory("健康險", "健康險", List.of("3000", "3100", "3300")));
-//                                                                    ↑ 加入
+**情況 A — 歸屬到既有子分類（例如健康險）：**
+```yaml
+- name: "健康險"
+  number: "八"
+  sub-categories:
+    - name: "健康險"
+      codes: ["3000", "3100", "3300"]  # ← 加入 3300
 ```
 
 **情況 B — 建立新子分類：**
-```java
-list.add(new SubCategory("新子分類名", "歸屬大類名", List.of("3300")));
+```yaml
+- name: "健康險"
+  number: "八"
+  sub-categories:
+    - name: "健康險"
+      codes: ["3000", "3100"]
+    - name: "長照險"           # ← 新子分類
+      codes: ["3300"]
 ```
 
-> ⚠️ 如果建立新子分類，總表會自動多一欄，但表頭合併儲存格可能需要調整
-> `PremiumReportWriter.writeSummarySheet()` 中的 group/merge 邏輯。
+> 新增子分類會自動在總表/比較表新增對應欄位，表頭也會自動調整。
 
-#### (e) 歸屬表子分組 (可選)
+#### (c) 歸屬表子分組 (可選)
 
-如果需要在歸屬表的 D 欄顯示子分組名稱，在 `CODE_TO_SUB_GROUP` 新增：
+如果需要在歸屬表的 D 欄顯示子分組名稱，加入 `sub-group`：
 
-```java
-map.put("3300", "新分組");
+```yaml
+- name: "長照險"
+  sub-group: "長照"        # ← 歸屬表 D 欄顯示
+  codes: ["3300"]
 ```
 
-### 7.2 修改來源解析器 (通常不需要)
+#### (d) 總表/比較表子分組標題 (可選)
 
-`InsuranceCodeUtil.java` 會自動辨識 4 位數代號。如果新險種的代號格式不同，才需要修改。
+如果新子分類需要和其他子分類共享一個合併標題（類似「強制責任險」包含汽車/機車/電動二輪），
+使用 `header-group` 和 `header-label`：
 
-來源 Excel 中的欄位是按固定 row 位置解析的（`SourceExcelReader.java`），如果來源檔案結構改變，需要同步調整。
+```yaml
+- name: "一般長照"
+  header-group: "長照險"    # ← 合併標題名
+  header-label: "一般"      # ← 個別欄位名
+  codes: ["3300"]
+- name: "機構長照"
+  header-group: "長照險"
+  header-label: "機構"
+  codes: ["3400"]
+```
 
-### 7.3 暫時隱藏新險種
+### 7.2 暫時隱藏新險種
 
-如果新險種的來源資料尚未就緒，可以在 `config/application.yml` 中暫時隱藏：
+如果新險種的來源資料尚未就緒，在 `config/application.yml` 中隱藏：
 
 ```yaml
 columns:
@@ -298,32 +337,34 @@ columns:
     - "3300"    # 暫時隱藏新險種
 ```
 
-### 7.4 修改完整範例
-
-假設新增 `3300` 歸屬到「健康險」大類下的新子分類「長照險」：
-
-```java
-// 1. ALL_INSURANCE_CODES — 在 3200 之後插入
-"3000", "3100", "3200", "3300", "9900"
-
-// 2. CODE_TO_SHORT_NAME
-map.put("3300", "長照險");
-
-// 3. CODE_TO_FULL_NAME
-map.put("3300", "長期照顧保險");
-
-// 4. SUB_CATEGORIES — 新增子分類
-list.add(new SubCategory("長照險", "健康險", List.of("3300")));
-
-// 5. 不需要修改 hidden-codes (除非要暫時隱藏)
-```
-
-### 7.5 重新編譯
-
-修改程式碼後需要重新編譯：
+### 7.3 修改後直接執行
 
 ```cmd
-build.bat
+run.bat
+```
+
+**不需要 `build.bat`，不需要重新編譯。**
+
+### 7.4 完整範例
+
+新增 `3300` 歸屬到「健康險」大類下的新子分類「長照險」：
+
+```yaml
+# config/insurance-mapping.yml 的修改:
+
+# 1. codes 區塊 — 在 3100 之後插入
+- code: "3300"
+  short-name: "長照險"
+  full-name: "長期照顧保險"
+
+# 2. categories 區塊 — 健康險大類新增子分類
+- name: "健康險"
+  number: "八"
+  sub-categories:
+    - name: "健康險"
+      codes: ["3000", "3100"]
+    - name: "長照險"
+      codes: ["3300"]
 ```
 
 ---
