@@ -49,23 +49,36 @@ public class FileScanner {
         fileSet.setCurrentYear(processYear);
         int priorYear = processYear - 1;
 
-        // 掃描年份資料夾
+        // 掃描今年資料夾
         Path yearDir = importDir.resolve(String.valueOf(processYear));
         if (!Files.exists(yearDir)) {
             throw new IOException("年份資料夾不存在: " + yearDir.toAbsolutePath());
         }
 
-        log.info("掃描來源資料夾: {}", yearDir.toAbsolutePath());
+        log.info("掃描今年來源資料夾: {}", yearDir.toAbsolutePath());
+        scanYearDir(yearDir, processYear, priorYear, fileSet);
 
-        // 遍歷月份子資料夾
-        try (Stream<Path> monthDirs = Files.list(yearDir)) {
-            monthDirs.filter(Files::isDirectory)
-                    .sorted()
-                    .forEach(monthDir -> scanMonthDir(monthDir, processYear, priorYear, fileSet));
+        // 掃描去年資料夾 (若存在)
+        Path priorYearDir = importDir.resolve(String.valueOf(priorYear));
+        if (Files.exists(priorYearDir)) {
+            log.info("掃描去年來源資料夾: {}", priorYearDir.toAbsolutePath());
+            scanYearDir(priorYearDir, processYear, priorYear, fileSet);
+        } else {
+            log.warn("去年資料夾不存在，將略過去年資料: {}", priorYearDir.toAbsolutePath());
         }
 
         log.info("掃描完成: {}", fileSet);
         return fileSet;
+    }
+
+    private void scanYearDir(Path yearDir, int currentYear, int priorYear, SourceFileSet fileSet) {
+        try (Stream<Path> monthDirs = Files.list(yearDir)) {
+            monthDirs.filter(Files::isDirectory)
+                    .sorted()
+                    .forEach(monthDir -> scanMonthDir(monthDir, currentYear, priorYear, fileSet));
+        } catch (IOException e) {
+            log.error("掃描年份資料夾失敗: {}", yearDir, e);
+        }
     }
 
     private void scanMonthDir(Path monthDir, int currentYear, int priorYear, SourceFileSet fileSet) {
