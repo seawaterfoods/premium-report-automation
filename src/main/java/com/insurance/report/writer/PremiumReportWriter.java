@@ -189,9 +189,10 @@ public class PremiumReportWriter {
         for (int c = 0; c <= totalCol; c++) {
             sheet.setColumnWidth(c, c <= 2 ? 4000 : 3500);
         }
-    }
 
-    // ==================== Sheet 3/4: 總表 ====================
+        // 凍結窗格: 固定前 2 列 (表頭) + 前 3 欄 (代號/月份/公司)
+        sheet.createFreezePane(3, 2);
+    }
 
     /** 總表固定使用全部 16 子分類 (含國外分進) */
     private static final List<SubCategory> ALL_SUMMARY_CATS = CategoryMapping.getAllSubCategoriesWithOverseas();
@@ -413,21 +414,19 @@ public class PremiumReportWriter {
         for (int c = FIRST_DATA_COL; c <= lastCol; c++) {
             sheet.setColumnWidth(c, 3800);
         }
+
+        // 凍結窗格: 固定前 5 列 (標題+表頭) + 前 3 欄 (代號/月份/公司)
+        sheet.createFreezePane(3, 5);
     }
 
     // ==================== Sheet 5: 歸屬 ====================
 
     private void writeGuishuSheet(Workbook wb, ExcelStyleHelper styles) {
         Sheet sheet = wb.createSheet("歸屬");
-        int rowIdx = 0;
 
-        // 表頭: 類 / 歸屬 / 代號 / (子分組) / 險種
-        Row header = sheet.createRow(rowIdx++);
-        createCell(header, 0, "類", styles.getHeaderStyle());
-        createCell(header, 1, "歸屬", styles.getHeaderStyle());
-        createCell(header, 2, "代號", styles.getHeaderStyle());
-        createCell(header, 3, "", styles.getHeaderStyle());
-        createCell(header, 4, "險種", styles.getHeaderStyle());
+        // 收集各大類的險種代號列表
+        List<String[]> categoryBlocks = new ArrayList<>();  // [majorCat, categoryNumber]
+        List<List<String>> categoryCodeLists = new ArrayList<>();
 
         for (String majorCat : CategoryMapping.MAJOR_CATEGORIES) {
             List<String> codesInCategory = new ArrayList<>();
@@ -439,32 +438,119 @@ public class PremiumReportWriter {
             if (majorCat.equals("國外分進")) {
                 codesInCategory.addAll(CategoryMapping.OVERSEAS_REINSURANCE.getInsuranceCodes());
             }
+            String catNum = CategoryMapping.MAJOR_CATEGORY_NUMBER.getOrDefault(majorCat, "");
+            categoryBlocks.add(new String[]{majorCat, catNum});
+            categoryCodeLists.add(codesInCategory);
+        }
 
-            String categoryNumber = CategoryMapping.MAJOR_CATEGORY_NUMBER.getOrDefault(majorCat, "");
-            int startRow = rowIdx;
+        // 計算每個大類的起始/結束列 (0-based, 不含表頭)
+        int totalDataRows = categoryCodeLists.stream().mapToInt(List::size).sum();
+        int lastDataRow = totalDataRows; // 0-based (row 0=header, 1..N=data)
+
+        // 計算每個大類的第一列索引 (1-based, 因為 row 0 是表頭)
+        int[] categoryFirstRow = new int[categoryBlocks.size()];
+        int[] categoryLastRow = new int[categoryBlocks.size()];
+        int pos = 1;
+        for (int i = 0; i < categoryBlocks.size(); i++) {
+            categoryFirstRow[i] = pos;
+            categoryLastRow[i] = pos + categoryCodeLists.get(i).size() - 1;
+            pos += categoryCodeLists.get(i).size();
+        }
+
+        // 寫入表頭 (row 0)
+        Row header = sheet.createRow(0);
+        String[] headerTexts = {"類", "歸屬", "代號", "", "險種"};
+        for (int c = 0; c < 5; c++) {
+            BorderStyle left = (c == 0) ? BorderStyle.DOUBLE : BorderStyle.THIN;
+            BorderStyle right = (c == 4) ? BorderStyle.DOUBLE : BorderStyle.THIN;
+            CellStyle style = styles.getGuishuStyle(ExcelStyleHelper.GuishuFont.HEADER,
+                    BorderStyle.DOUBLE, BorderStyle.NONE, left, right);
+            createCell(header, c, headerTexts[c], style);
+        }
+
+        // 寫入資料列
+        // 框線規則 (對照範例):
+        //   每個大類邊界放一條 MEDIUM 線，放在上方 top 或下方 bottom (不重複)
+        //   需要 bottom=MEDIUM: 單行大類 + 汽車(3) + 健康(7)
+        //   需要 top=MEDIUM: 第一大類 + 前一大類沒有 bottom 的
+        //   最後一列: bottom=DOUBLE
+        Set<Integer> needsBottom = new HashSet<>();
+        for (int i = 0; i < categoryBlocks.size(); i++) {
+            if (categoryCodeLists.get(i).size() == 1 || i == 3 || i == 7) {
+                needsBottom.add(i);
+            }
+        }
+        // 前一大類是否有 bottom=MEDIUM (用來決定當前大類是否需要 top)
+        boolean prevHadBottom = false;
+
+        int rowIdx = 1;
+        for (int catIdx = 0; catIdx < categoryBlocks.size(); catIdx++) {
+            String majorCat = categoryBlocks.get(catIdx)[0];
+            String catNum = categoryBlocks.get(catIdx)[1];
+            List<String> codes = categoryCodeLists.get(catIdx);
+            boolean catNeedsBottom = needsBottom.contains(catIdx);
             boolean firstInCategory = true;
 
-            for (String code : codesInCategory) {
+            for (int codeIdx = 0; codeIdx < codes.size(); codeIdx++) {
+                String code = codes.get(codeIdx);
                 Row row = sheet.createRow(rowIdx);
-                // A: 類序號 (僅第一列)
-                if (firstInCategory) {
-                    createCell(row, 0, categoryNumber, styles.getCompanyStyle());
-                    createCell(row, 1, majorCat, styles.getCompanyStyle());
-                    firstInCategory = false;
-                } else {
-                    createCell(row, 0, "", styles.getCompanyStyle());
-                    createCell(row, 1, "", styles.getCompanyStyle());
+
+                boolean isCatFirst = (codeIdx == 0);
+                boolean isCatLast = (codeIdx == codes.size() - 1);
+                boolean isTableLast = (rowIdx == lastDataRow);
+
+                // 上框線
+                BorderStyle topBorder = BorderStyle.NONE;
+                if (isCatFirst && !prevHadBottom) {
+                    topBorder = BorderStyle.MEDIUM;
                 }
-                // C: 代號
-                createCell(row, 2, code, styles.getCompanyStyle());
-                // D: 子分組名 (僅在子分組第一個代號時填入)
-                String subGroup = CategoryMapping.CODE_TO_SUB_GROUP.getOrDefault(code, "");
-                createCell(row, 3, subGroup, styles.getCompanyStyle());
-                // E: 險種全名
-                createCell(row, 4, CategoryMapping.CODE_TO_FULL_NAME.getOrDefault(code, ""),
-                        styles.getCompanyStyle());
+
+                // 下框線
+                BorderStyle bottomBorder = BorderStyle.NONE;
+                if (isTableLast) {
+                    bottomBorder = BorderStyle.DOUBLE;
+                } else if (isCatLast && catNeedsBottom) {
+                    bottomBorder = BorderStyle.MEDIUM;
+                }
+
+                for (int c = 0; c < 5; c++) {
+                    BorderStyle left = (c == 0) ? BorderStyle.DOUBLE : BorderStyle.THIN;
+                    BorderStyle right = (c == 4) ? BorderStyle.DOUBLE : BorderStyle.THIN;
+
+                    ExcelStyleHelper.GuishuFont fontType;
+                    String cellValue;
+
+                    switch (c) {
+                        case 0: // 類序號
+                            fontType = ExcelStyleHelper.GuishuFont.CATEGORY;
+                            cellValue = firstInCategory ? catNum : "";
+                            break;
+                        case 1: // 歸屬
+                            fontType = ExcelStyleHelper.GuishuFont.DATA;
+                            cellValue = firstInCategory ? majorCat : "";
+                            break;
+                        case 2: // 代號
+                            fontType = ExcelStyleHelper.GuishuFont.CODE;
+                            cellValue = code;
+                            break;
+                        case 3: // 子分組
+                            fontType = ExcelStyleHelper.GuishuFont.DATA;
+                            cellValue = CategoryMapping.CODE_TO_SUB_GROUP.getOrDefault(code, "");
+                            break;
+                        default: // 險種全名
+                            fontType = ExcelStyleHelper.GuishuFont.DATA;
+                            cellValue = CategoryMapping.CODE_TO_FULL_NAME.getOrDefault(code, "");
+                            break;
+                    }
+
+                    CellStyle style = styles.getGuishuStyle(fontType, topBorder, bottomBorder, left, right);
+                    createCell(row, c, cellValue, style);
+                }
+
+                firstInCategory = false;
                 rowIdx++;
             }
+            prevHadBottom = catNeedsBottom;
         }
 
         sheet.setColumnWidth(0, 2000);

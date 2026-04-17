@@ -7,6 +7,9 @@ import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Excel 格式工具 — 提供共用的儲存格樣式
  *
@@ -244,6 +247,9 @@ public class ExcelStyleHelper {
         cmpBoldPercentStyle.setDataFormat(df.getFormat("0.00%"));
         cmpBoldPercentStyle.setAlignment(HorizontalAlignment.RIGHT);
         applyThinBorders(cmpBoldPercentStyle);
+
+        // --- 歸屬表字體 ---
+        initGuishuFonts();
     }
 
     private void applyCyanBg(XSSFCellStyle style, XSSFColor color) {
@@ -280,6 +286,70 @@ public class ExcelStyleHelper {
     public CellStyle getCmpPercentStyle() { return cmpPercentStyle; }
     public CellStyle getCmpRedLabelStyle() { return cmpRedLabelStyle; }
     public CellStyle getCmpBoldPercentStyle() { return cmpBoldPercentStyle; }
+
+    // === 歸屬表樣式工廠 ===
+
+    /** 歸屬表字體類型 */
+    public enum GuishuFont { HEADER, CATEGORY, DATA, CODE }
+
+    private static final byte[] BROWN_FONT = {(byte) 0x99, 0x33, 0x00};
+
+    private XSSFFont guishuHeaderFont;    // 新細明體 16pt
+    private XSSFFont guishuCategoryFont;  // 新細明體 14pt bold brown
+    private XSSFFont guishuDataFont;      // 新細明體 14pt
+    private XSSFFont guishuCodeFont;      // Book Antiqua 14pt
+    private final Map<String, CellStyle> guishuStyleCache = new HashMap<>();
+
+    private void initGuishuFonts() {
+        XSSFWorkbook xwb = (XSSFWorkbook) workbook;
+
+        guishuHeaderFont = xwb.createFont();
+        guishuHeaderFont.setFontName("新細明體");
+        guishuHeaderFont.setFontHeightInPoints((short) 16);
+
+        guishuCategoryFont = xwb.createFont();
+        guishuCategoryFont.setFontName("新細明體");
+        guishuCategoryFont.setFontHeightInPoints((short) 14);
+        guishuCategoryFont.setBold(true);
+        guishuCategoryFont.setColor(new XSSFColor(BROWN_FONT, null));
+
+        guishuDataFont = xwb.createFont();
+        guishuDataFont.setFontName("新細明體");
+        guishuDataFont.setFontHeightInPoints((short) 14);
+
+        guishuCodeFont = xwb.createFont();
+        guishuCodeFont.setFontName("Book Antiqua");
+        guishuCodeFont.setFontHeightInPoints((short) 14);
+    }
+
+    /**
+     * 建立歸屬表儲存格樣式 (帶快取)
+     * @param fontType 字體類型
+     * @param top 上框線
+     * @param bottom 下框線
+     * @param left 左框線
+     * @param right 右框線
+     */
+    public CellStyle getGuishuStyle(GuishuFont fontType,
+                                     BorderStyle top, BorderStyle bottom,
+                                     BorderStyle left, BorderStyle right) {
+        String key = fontType + "|" + top + "|" + bottom + "|" + left + "|" + right;
+        return guishuStyleCache.computeIfAbsent(key, k -> {
+            CellStyle style = workbook.createCellStyle();
+            switch (fontType) {
+                case HEADER:   style.setFont(guishuHeaderFont); break;
+                case CATEGORY: style.setFont(guishuCategoryFont); break;
+                case CODE:     style.setFont(guishuCodeFont); break;
+                default:       style.setFont(guishuDataFont); break;
+            }
+            style.setBorderTop(top);
+            style.setBorderBottom(bottom);
+            style.setBorderLeft(left);
+            style.setBorderRight(right);
+            style.setVerticalAlignment(VerticalAlignment.CENTER);
+            return style;
+        });
+    }
 
     // --- 工具方法 ---
 
