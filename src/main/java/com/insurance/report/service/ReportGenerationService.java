@@ -169,6 +169,7 @@ public class ReportGenerationService {
         Files.createDirectories(outputDir);
 
         // 報表一：保費統計表
+//        String report1Name = String.format("%d年%02d月產險業務(簽單)保費統計表.xlsx", year, latestMonth);
         String report1Name = String.format("%d年%02d月產險業務保費收入統計表.xlsx", year, latestMonth);
         premiumWriter.write(year, latestMonth,
                 monthlyData, cumulativeData,
