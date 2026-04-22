@@ -14,6 +14,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 讀取來源 Excel 檔案 (保險收入統計表.xlsx)
@@ -127,6 +128,120 @@ public class ExcelSourceReader {
             }
             return code;
         }
+    }
+
+    /**
+     * 驗證來源檔案內容，回傳錯誤清單 (空表示全部通過)
+     * <p>
+     * 檢核項目：
+     *   1. C2 年月是否與檔名一致
+     *   2. B4 公司代號是否與檔名一致
+     *   3. 金額儲存格 (C6:C38) 是否含有小數
+     *   4. 資料區域是否含有公式
+     */
+    public List<String> validateContent(SourceFileInfo fileInfo) throws IOException {
+        List<String> errors = new ArrayList<>();
+
+        try (InputStream is = Files.newInputStream(fileInfo.getFilePath());
+             Workbook workbook = new XSSFWorkbook(is)) {
+
+            Sheet sheet = workbook.getSheet("保險收入統計表");
+            if (sheet == null) {
+                sheet = workbook.getSheetAt(0);
+            }
+
+            String fileName = fileInfo.getFilePath().getFileName().toString();
+
+            // --- 公式檢查 ---
+            boolean c2HasFormula = isCellFormula(sheet, YEAR_MONTH_ROW, YEAR_MONTH_COL);
+            if (c2HasFormula) {
+                String formula = sheet.getRow(YEAR_MONTH_ROW).getCell(YEAR_MONTH_COL).getCellFormula();
+                errors.add(String.format("檔案 %s: C2(年月) 含有公式 [%s]", fileName, formula));
+            }
+
+            boolean b4HasFormula = isCellFormula(sheet, COMPANY_CODE_ROW, COMPANY_CODE_COL);
+            if (b4HasFormula) {
+                String formula = sheet.getRow(COMPANY_CODE_ROW).getCell(COMPANY_CODE_COL).getCellFormula();
+                errors.add(String.format("檔案 %s: B4(公司代號) 含有公式 [%s]", fileName, formula));
+            }
+
+            List<String> formulaCells = new ArrayList<>();
+            List<String> decimalCells = new ArrayList<>();
+            for (int row = DATA_START_ROW; row <= DATA_END_ROW; row++) {
+                Row r = sheet.getRow(row);
+                if (r == null) continue;
+                Cell cell = r.getCell(AMOUNT_COL);
+                if (cell == null) continue;
+
+                if (cell.getCellType() == CellType.FORMULA) {
+                    formulaCells.add("C" + (row + 1));
+                } else if (cell.getCellType() == CellType.NUMERIC) {
+                    double val = cell.getNumericCellValue();
+                    if (Math.abs(val - Math.round(val)) > 0.0001) {
+                        decimalCells.add(String.format("C%d [%s]", row + 1, val));
+                    }
+                }
+            }
+
+            if (!formulaCells.isEmpty()) {
+                errors.add(String.format("檔案 %s: 金額儲存格含有公式，無法正確讀取 (共 %d 格: %s)",
+                        fileName, formulaCells.size(),
+                        formulaCells.stream().limit(5).collect(Collectors.joining(", "))
+                                + (formulaCells.size() > 5 ? " ..." : "")));
+            }
+
+            // --- 小數檢查 (僅在非公式時) ---
+            if (!decimalCells.isEmpty()) {
+                errors.add(String.format("檔案 %s: 金額含有小數，應為整數 (共 %d 格: %s)",
+                        fileName, decimalCells.size(),
+                        decimalCells.stream().limit(5).collect(Collectors.joining(", "))
+                                + (decimalCells.size() > 5 ? " ..." : "")));
+            }
+
+            // --- C2 年月 vs 檔名年月 (僅在非公式時) ---
+            if (!c2HasFormula) {
+                String c2Value = readCellAsString(sheet, YEAR_MONTH_ROW, YEAR_MONTH_COL);
+                int expectedYearMonth = fileInfo.getYearMonth();
+                if (c2Value == null || c2Value.isEmpty()) {
+                    errors.add(String.format("檔案 %s: C2 年月為空", fileName));
+                } else {
+                    try {
+                        int c2YearMonth = Integer.parseInt(c2Value);
+                        if (c2YearMonth != expectedYearMonth) {
+                            errors.add(String.format("檔案 %s: C2 年月 [%s] ≠ 檔名年月 [%d]",
+                                    fileName, c2Value, expectedYearMonth));
+                        }
+                    } catch (NumberFormatException e) {
+                        errors.add(String.format("檔案 %s: C2 年月格式不正確 [%s]", fileName, c2Value));
+                    }
+                }
+            }
+
+            // --- B4 公司代號 vs 檔名 (僅在非公式時) ---
+            if (!b4HasFormula) {
+                String internalCode = readCellAsString(sheet, COMPANY_CODE_ROW, COMPANY_CODE_COL);
+                if (internalCode != null && internalCode.length() == 1) {
+                    internalCode = "0" + internalCode;
+                }
+                String fileNameCode = fileInfo.getCompanyCode();
+                if (internalCode == null || internalCode.isEmpty()) {
+                    errors.add(String.format("檔案 %s: 內容無公司代號 (B4 為空)", fileName));
+                } else if (!fileNameCode.equals(internalCode)) {
+                    errors.add(String.format("檔案 %s: 檔名公司代號 [%s] ≠ 內容公司代號 [%s]",
+                            fileName, fileNameCode, internalCode));
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    private boolean isCellFormula(Sheet sheet, int row, int col) {
+        Row r = sheet.getRow(row);
+        if (r == null) return false;
+        Cell cell = r.getCell(col);
+        if (cell == null) return false;
+        return cell.getCellType() == CellType.FORMULA;
     }
 
     private String readCellAsString(Sheet sheet, int row, int col) {

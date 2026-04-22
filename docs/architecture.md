@@ -113,18 +113,21 @@ sequenceDiagram
     SCN->>SCN: 偵測最新月份
     SCN-->>SVC: SourceFileSet (今年+去年)
     
-    Note over SVC,RDR: Step 2: 檔名公司代號檢核
+    Note over SVC,RDR: Step 2: 來源檔案內容檢核
     loop 每份來源檔
-        SVC->>RDR: readCompanyCode(file)
-        RDR-->>SVC: 內容公司代號
-        SVC->>SVC: 比對檔名代號 vs 內容代號
+        SVC->>RDR: validateContent(file)
+        RDR->>RDR: 檢查公式 (C2, B4, C6:C38)
+        RDR->>RDR: 檢查小數 (C6:C38)
+        RDR->>RDR: 比對 C2 年月 vs 檔名
+        RDR->>RDR: 比對 B4 代號 vs 檔名
+        RDR-->>SVC: 錯誤清單
     end
-    alt 有不一致
+    alt 有檢核異常
         SVC->>SVC: 全部列出至 report.log
         SVC-->>APP: 中止 (不產生報表)
     end
 
-    Note over SVC,RDR: Step 3: 驗證 & 解析
+    Note over SVC,RDR: Step 3: 讀取資料
     loop 每份來源檔
         SVC->>VAL: validate(file)
         VAL->>VAL: 驗證檔名/結構/代號

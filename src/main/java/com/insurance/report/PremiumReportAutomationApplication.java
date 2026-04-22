@@ -7,6 +7,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+import java.io.IOException;
+
 @SpringBootApplication
 public class PremiumReportAutomationApplication implements CommandLineRunner {
 
@@ -28,8 +30,11 @@ public class PremiumReportAutomationApplication implements CommandLineRunner {
 		try {
 			reportGenerationService.execute();
 			log.info("========== 執行完成 ==========");
+		} catch (IOException e) {
+			log.error("執行失敗: {}", e.getMessage());
+			System.exit(1);
 		} catch (Exception e) {
-			log.error("執行失敗: {}", e.getMessage(), e);
+			log.error("執行失敗 (非預期錯誤): {}", e.getMessage(), e);
 			System.exit(1);
 		}
 	}

@@ -72,22 +72,22 @@ public class ReportGenerationService {
         }
         int latestMonth = fileSet.getLatestMonth();
 
-        // Step 2: 檔名公司代號檢核
-        log.info("Step 2: 檔名 vs 檔案內容公司代號檢核");
-        List<String> codeErrors = validateCompanyCodes(fileSet.getCurrentYearFiles());
-        codeErrors.addAll(validateCompanyCodes(fileSet.getPriorYearFiles()));
-        if (!codeErrors.isEmpty()) {
-            log.error("========== 公司代號檢核失敗 ==========");
-            for (String err : codeErrors) {
+        // Step 2: 來源檔案內容檢核
+        log.info("Step 2: 來源檔案內容檢核 (C2年月、公司代號、金額格式、公式偵測)");
+        List<String> contentErrors = validateFileContent(fileSet.getCurrentYearFiles());
+        contentErrors.addAll(validateFileContent(fileSet.getPriorYearFiles()));
+        if (!contentErrors.isEmpty()) {
+            log.error("========== 來源檔案檢核失敗 ==========");
+            for (String err : contentErrors) {
                 log.error("  {}", err);
             }
-            log.error("共 {} 筆檔案公司代號不一致，不產生報表", codeErrors.size());
-            throw new IOException("公司代號檢核失敗，請修正後重新執行。詳情請查看 report.log");
+            log.error("共 {} 筆檢核異常，不產生報表", contentErrors.size());
+            throw new IOException("來源檔案檢核失敗，請修正後重新執行。詳情請查看 report.log");
         }
-        log.info("公司代號檢核通過");
+        log.info("來源檔案檢核通過");
 
-        // Step 3: 驗證 & 讀取
-        log.info("Step 3: 驗證 & 讀取 (今年 {} 筆, 去年 {} 筆)",
+        // Step 3: 讀取資料
+        log.info("Step 3: 讀取資料 (今年 {} 筆, 去年 {} 筆)",
                 countFiles(fileSet.getCurrentYearFiles()),
                 countFiles(fileSet.getPriorYearFiles()));
 
@@ -198,29 +198,20 @@ public class ReportGenerationService {
     // --- 內部方法 ---
 
     /**
-     * 檢核所有檔案的檔名公司代號與檔案內容公司代號是否一致
+     * 檢核所有檔案的內容：公司代號、C2年月、金額小數、公式
      */
-    private List<String> validateCompanyCodes(Map<Integer, List<SourceFileInfo>> filesByMonth) {
+    private List<String> validateFileContent(Map<Integer, List<SourceFileInfo>> filesByMonth) {
         List<String> errors = new ArrayList<>();
         for (var entry : filesByMonth.entrySet()) {
             for (SourceFileInfo fileInfo : entry.getValue()) {
                 List<String> basicErrors = fileValidator.validate(fileInfo);
                 if (!basicErrors.isEmpty()) {
-                    continue; // 基本驗證不過的跳過，後面 readAllFiles 會再報錯
+                    continue;
                 }
                 try {
-                    String internalCode = excelReader.readCompanyCode(fileInfo);
-                    String fileNameCode = fileInfo.getCompanyCode();
-
-                    if (internalCode == null || internalCode.isEmpty()) {
-                        errors.add(String.format("檔案 %s: 內容無公司代號 (B4 為空)",
-                                fileInfo.getFilePath().getFileName()));
-                    } else if (!fileNameCode.equals(internalCode)) {
-                        errors.add(String.format("檔案 %s: 檔名公司代號 [%s] ≠ 內容公司代號 [%s]",
-                                fileInfo.getFilePath().getFileName(), fileNameCode, internalCode));
-                    }
+                    errors.addAll(excelReader.validateContent(fileInfo));
                 } catch (Exception e) {
-                    errors.add(String.format("檔案 %s: 無法讀取公司代號 — %s",
+                    errors.add(String.format("檔案 %s: 無法讀取檔案內容 — %s",
                             fileInfo.getFilePath().getFileName(), e.getMessage()));
                 }
             }
@@ -234,13 +225,13 @@ public class ReportGenerationService {
             for (SourceFileInfo fileInfo : entry.getValue()) {
                 List<String> errors = fileValidator.validate(fileInfo);
                 if (!errors.isEmpty()) {
-                    log.error("檔案驗證失敗: {}", errors);
+                    log.warn("檔案驗證失敗: {}", errors);
                     continue;
                 }
                 try {
                     result.add(excelReader.read(fileInfo));
                 } catch (Exception e) {
-                    log.error("讀取檔案失敗: {} - {}", fileInfo.getFilePath(), e.getMessage());
+                    log.warn("讀取檔案失敗: {} - {}", fileInfo.getFilePath().getFileName(), e.getMessage());
                 }
             }
         }

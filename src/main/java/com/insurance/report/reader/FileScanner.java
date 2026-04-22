@@ -77,7 +77,7 @@ public class FileScanner {
                     .sorted()
                     .forEach(monthDir -> scanMonthDir(monthDir, currentYear, priorYear, fileSet));
         } catch (IOException e) {
-            log.error("掃描年份資料夾失敗: {}", yearDir, e);
+            log.warn("掃描年份資料夾失敗: {}", yearDir, e);
         }
     }
 
@@ -114,7 +114,7 @@ public class FileScanner {
                         }
                     });
         } catch (IOException e) {
-            log.error("掃描月份資料夾失敗: {}", monthDir, e);
+            log.warn("掃描月份資料夾失敗: {}", monthDir, e);
         }
     }
 }
