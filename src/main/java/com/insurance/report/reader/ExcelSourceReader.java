@@ -101,7 +101,7 @@ public class ExcelSourceReader {
             // 驗證歸屬分頁是否存在
             Sheet guishuSheet = workbook.getSheet("歸屬");
             if (guishuSheet == null) {
-                log.error("公司別{}({})，缺少歸屬分頁", companyCode, companyName);
+                log.warn("公司別{}({})，缺少歸屬分頁", companyCode, companyName);
             }
 
             log.debug("讀取完成: {}", data);
